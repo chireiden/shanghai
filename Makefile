@@ -4,7 +4,7 @@
 	touch .install-deps
 
 flake: .install-deps
-	flake8 shanghai
+	flake8 .
 
 .develop: .install-deps $(shell find shanghai -type f)
 	pip install -e .
