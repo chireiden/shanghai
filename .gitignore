@@ -90,3 +90,5 @@ ENV/
 
 # other
 .idea/
+.install-deps
+.develop
