@@ -1,6 +1,5 @@
 
 from unittest import TestCase
-import shanghai
 
 
 class TestSample(TestCase):
