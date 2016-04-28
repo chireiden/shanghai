@@ -31,20 +31,20 @@ class Network:
         registered = False
         loop = asyncio.get_event_loop()
 
-        running = True
-
-        def stop_running():
-            nonlocal running
-            running = False
+        async def stop_running():
+            await queue.put(Event('close_now', None))
 
         # first item on queue is the client
         client = await queue.get()
 
+        running = True
         while running:
             event = await queue.get()
             print(event)
             if event.name == 'disconnected':
                 break
+            elif event.name == 'close_now':
+                running = False
 
             # create context
             context = Context(event, self, client)
@@ -58,11 +58,15 @@ class Network:
                 context.sendline('USER uiaeie * * :realname')
                 context.sendline('JOIN #test')
                 registered = True
-                loop.call_later(10, stop_running)
+                loop.call_later(
+                    10, lambda: asyncio.ensure_future(stop_running()))
         else:
             # we did not break, so we close normally
             print('closing connection!')
             await client.close('Normal bye bye!')
+
+        if running:
+            print('connection closed by peer!')
 
 
 def main():
