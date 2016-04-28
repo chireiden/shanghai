@@ -30,9 +30,8 @@ class Client:
         reader, writer = await asyncio.open_connection(
             self.host, self.port, ssl=self.ssl, loop=self.loop)
         self.writer = writer
-        print('foobar')
-        await self.queue.put(self)
-        await self.queue.put(Event('connected', None))
+
+        await self.queue.put(Event('connected', self))
 
         while not reader.at_eof():
             line = await reader.readline()

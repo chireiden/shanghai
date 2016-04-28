@@ -12,9 +12,9 @@ def main():
     bot = Shanghai()
     bot.client = Client('localhost', 6667, queue, loop=loop)
 
-    network = Network()
+    network = Network(queue)
 
-    worker_task = network.worker(queue)
+    worker_task = network.worker()
     bot_task = bot.client.run()
     loop.run_until_complete(asyncio.wait([
         worker_task,

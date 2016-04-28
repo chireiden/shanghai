@@ -25,22 +25,42 @@ class Context:
 
 class Network:
     """Sample Network class"""
-    # TODO: Move this class into it's own file later
 
-    async def worker(self, queue):
-        """Sample worker."""
-        registered = False
+    def __init__(self, queue):
+        self.registered = False
+        self.queue = queue
+        self.client = None
+
+    async def register(self):
+        # testing
+        self.client.sendline('NICK fouiae')
+        self.client.sendline('USER uiaeie * * :realname')
+        self.client.sendline('JOIN #test')
+        self.registered = True
         loop = asyncio.get_event_loop()
+        loop.call_later(
+            10, lambda: asyncio.ensure_future(self.stop_running()))
 
-        async def stop_running():
-            await queue.put(Event('close_now', None))
+    async def stop_running(self):
+        await self.queue.put(Event('close_now', None))
 
-        # first item on queue is the client
-        client = await queue.get()
+    async def worker(self):
+        """Sample worker."""
+        self.registered = False
+
+        # first item on queue should be "connected", with the client
+        # as its value
+        event = await self.queue.get()
+        assert event.name == "connected"
+        self.client = event.value
+        print(event)
 
         running = True
         while running:
-            event = await queue.get()
+            if not self.registered:
+                await self.register()
+
+            event = await self.queue.get()
             print(event)
             if event.name == 'disconnected':
                 break
@@ -48,23 +68,15 @@ class Network:
                 running = False
 
             # create context
-            context = Context(event, self, client)
+            context = Context(event, self, self.client)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
-
-            # testing
-            if not registered:
-                context.sendline('NICK fouiae')
-                context.sendline('USER uiaeie * * :realname')
-                context.sendline('JOIN #test')
-                registered = True
-                loop.call_later(
-                    10, lambda: asyncio.ensure_future(stop_running()))
         else:
             # we did not break, so we close normally
             print('closing connection!')
-            await client.close('Normal bye bye!')
+            await self.client.close('Normal bye bye!')
 
         if running:
             print('connection closed by peer!')
+        print('exiting.')
