@@ -68,7 +68,7 @@ class Network:
                 running = False
 
             # create context
-            context = Context(event, self, self.client)
+            context = Context(event, self, self.client)  # noqa
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
