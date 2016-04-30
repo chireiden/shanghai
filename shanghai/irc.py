@@ -97,7 +97,5 @@ class Message:
                    raw_line=raw_line)
 
     def __repr__(self):
-        return '{}({!r}, prefix={!r}, params={!r}, tags={!r})'.format(
-            self.__class__.__name__, self.command, self.prefix,
-            self.params, self.tags
-        )
+        return '{s.__class__.__name__}({s.command!r}, prefix={s.prefix!r}, '\
+               'params={s.params!r}, tags={s.tags!r})'.format(s=self)
