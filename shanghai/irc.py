@@ -77,18 +77,21 @@ class Message:
                 name, host = name.split('@', 1)
             prefix = name, ident, host
 
-        command, line = line.split(None, 1)
+        command, *line = line.split(None, 1)
         command = command.upper()
 
         params = []
         if line:
-            trailing = None
-            if ' :' in ' ' + line:
-                line, trailing = (' ' + line).split(' :', 1)
-            if line:
-                params = line.split()
-            if trailing is not None:
-                params.append(trailing)
+            line = line[0]
+            while line:
+                if line.startswith(':'):
+                    params.append(line[1:])
+                    line = ''
+                else:
+                    param, *line = line.split(None, 1)
+                    params.append(param)
+                    if line:
+                        line = line[0]
 
         return cls(command, prefix=prefix, params=params, tags=tags,
                    raw_line=raw_line)
