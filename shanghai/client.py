@@ -2,6 +2,7 @@
 import asyncio
 
 from .event import Event
+from .irc import Message
 
 
 class Client:
@@ -41,8 +42,12 @@ class Client:
                 line = line.decode('latin1')
             line = line.strip()
             if line:
-                message = line
-                # message = protocol.parse_line(line)
+                try:
+                    message = Message.from_line(line)
+                except Exception as exc:
+                    print('EXCEPTION!', exc)
+                    print('--> ', line)
+                    raise exc
                 await self.queue.put(
                     Event('message', message))
 
