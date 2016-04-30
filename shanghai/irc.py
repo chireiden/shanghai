@@ -1,4 +1,12 @@
 
+ESCAPE_SEQUENCES = {
+    'n': '\n',
+    'r': '\r',
+    's': ' ',
+    '\\': '\\',
+    ':': ';',
+}
+
 
 class Message:
 
@@ -11,19 +19,23 @@ class Message:
         self.raw_line = raw_line
 
     @staticmethod
+    def escape(value):
+        out_value = ''
+        sequences = {v: k for k, v in ESCAPE_SEQUENCES.items()}
+        for char in value:
+            if char in sequences:
+                out_value += '\\' + sequences.get(char)
+            else:
+                out_value += char
+        return out_value
+
+    @staticmethod
     def unescape(value):
         out_value = ''
         escape = False
-        sequences = {
-            'n': '\n',
-            'r': '\r',
-            's': ' ',
-            '\\': '\\',
-            ':': ';',
-        }
         for char in value:
             if escape:
-                out_value += sequences.get(char, char)
+                out_value += ESCAPE_SEQUENCES.get(char, char)
                 escape = False
             else:
                 if char == '\\':
