@@ -1,4 +1,6 @@
 
+import asyncio
+import itertools
 import random
 
 from .client import Client
@@ -27,16 +29,66 @@ class Context:
 class Network:
     """Sample Network class"""
 
-    def __init__(self, queue):
+    def __init__(self, name, config):
+        self.name = name
+        self.config = config
+        self.current_server = -1
         self.registered = False
-        self.queue = queue
+        self.runner_task = None
+        self.worker_task = None
+        self.queue = None
         self.client = None
+        self.reset()
+
+    def reset(self):
+        self.registered = False
+
+        self.runner_task = None
+        self.worker_task = None
+
+        server = self.next_server()
+        self.queue = asyncio.Queue()
+        self.client = Client(server.host, server.port, self.queue, server.ssl)
+
+    def next_server(self):
+        self.current_server = (self.current_server + 1) % \
+            len(self.config['servers'])
+        server = self.config['servers'][self.current_server]
+        print(self.name, 'Jumping server', server)
+        return server
+
+    def runner_task_done(self, task):
+        print(task)
+        self.worker_task.cancel()
+
+    def worker_task_done(self, task):
+        print(task)
+        self.runner_task.cancel()
+
+    async def start(self):
+        for retry in itertools.count(1):
+            self.runner_task = asyncio.ensure_future(self.client.run())
+            self.runner_task.add_done_callback(self.runner_task_done)
+
+            self.worker_task = asyncio.ensure_future(self.worker())
+            self.worker_task.add_done_callback(self.worker_task_done)
+
+            await asyncio.gather(self.runner_task, self.worker_task,
+                                 return_exceptions=True)
+            seconds = 30 * retry
+            print(self.name, 'Retry connecting in {} seconds'.format(seconds))
+            await asyncio.sleep(seconds)
+            self.reset()
 
     async def register(self):
         # testing
-        self.client.sendline('NICK Shanghai{:03d}'.format(
-            random.randrange(1000)))
-        self.client.sendline('USER uiaeie * * :realname')
+        nickname = self.config['nick']
+        user = self.config['user']
+        realname = self.config['realname']
+        while '?' in nickname:
+            nickname = nickname.replace('?', str(random.randrange(10)), 1)
+        self.client.sendline('NICK {}'.format(nickname))
+        self.client.sendline('USER {} * * :{}'.format(user, realname))
         self.registered = True
 
     async def stop_running(self):
@@ -50,8 +102,8 @@ class Network:
         # as its value
         event = await self.queue.get()
         assert event.name == "connected"
-        self.client = event.value
-        print(event)
+        # self.client = event.value
+        print(self.name, event)
 
         running = True
         while running:
@@ -59,7 +111,7 @@ class Network:
                 await self.register()
 
             event = await self.queue.get()
-            print(event)
+            print(self.name, event)
             if event.name == 'disconnected':
                 break
             elif event.name == 'close_now':
@@ -71,15 +123,21 @@ class Network:
                 message = event.value
                 if message.command == '001':
                     # join test channel
-                    self.client.sendline('JOIN #test')
+                    for channel in self.config['autojoin']:
+                        if channel.key:
+                            self.client.sendline(
+                                'JOIN {} {}'.format(*channel))
+                        else:
+                            self.client.sendline(
+                                'JOIN {}'.format(channel.channel))
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
         else:
             # we did not break, so we close normally
-            print('closing connection!')
+            print(self.name, 'closing connection!')
             await self.client.close('Normal bye bye!')
 
         if running:
-            print('connection closed by peer!')
-        print('exiting.')
+            print(self.name, 'connection closed by peer!')
+        print(self.name, 'exiting.')

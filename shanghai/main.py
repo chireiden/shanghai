@@ -2,8 +2,13 @@
 import asyncio
 
 from .core import Shanghai
-from .client import Client
-from .network import Network
+from .config import Configuration
+
+
+def exception_handler(task, context):
+    print(task)
+    print(context)
+    raise context['exception']
 
 
 def main():
@@ -17,16 +22,9 @@ def main():
         print('\033[32;1mUsing uvloop event loop.\033[0m')
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
+    config = Configuration('shanghai.ini')
+    bot = Shanghai(config)
+    tasks = list(bot.init_networks())
     loop = asyncio.get_event_loop()
-    queue = asyncio.Queue(100)
-    bot = Shanghai()
-    bot.client = Client('localhost', 6667, queue, loop=loop)
-
-    network = Network(queue)
-
-    worker_task = network.worker()
-    bot_task = bot.client.run()
-    loop.run_until_complete(asyncio.wait([
-        worker_task,
-        bot_task,
-    ]))
+    loop.set_exception_handler(exception_handler)
+    loop.run_until_complete(asyncio.wait(tasks))
