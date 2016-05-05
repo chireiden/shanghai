@@ -1,5 +1,5 @@
 
-import asyncio
+import random
 
 from .client import Client
 from .event import Event
@@ -33,13 +33,10 @@ class Network:
 
     async def register(self):
         # testing
-        self.client.sendline('NICK fouiae')
+        self.client.sendline('NICK Shanghai{:03d}'.format(
+            random.randrange(1000)))
         self.client.sendline('USER uiaeie * * :realname')
-        self.client.sendline('JOIN #test')
         self.registered = True
-        loop = asyncio.get_event_loop()
-        loop.call_later(
-            10, lambda: asyncio.ensure_future(self.stop_running()))
 
     async def stop_running(self):
         await self.queue.put(Event('close_now', None))
@@ -69,6 +66,11 @@ class Network:
 
             # create context
             context = Context(event, self, self.client)  # noqa
+            if event.name == 'message':
+                message = event.value
+                if message.command == '001':
+                    # join test channel
+                    self.client.sendline('JOIN #test')
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
