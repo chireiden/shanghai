@@ -19,8 +19,9 @@ class Context:
         self.network = network
         self.client = client
 
-    def sendline(self, line):
-        self.client.sendline(line)
+    def __getattr__(self, name):
+        if name in ('sendline', 'sendcmd', 'close'):
+            return getattr(self.client, name)
 
 
 class Network:
