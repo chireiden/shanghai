@@ -21,6 +21,13 @@ class Client:
     def sendline(self, line):
         self.writer.write(line.encode('utf-8') + b'\r\n')
 
+    def sendcmd(self, command, params=None):
+        params = [] if params is None else params
+        args = [command] + params
+        if ' ' in args[-1]:
+            args[-1] = ':{}'.format(args[-1])
+        self.sendline(' '.join(args))
+
     async def close(self, quitmsg=None):
         if quitmsg:
             self.sendline('QUIT :{}'.format(quitmsg))
@@ -48,6 +55,8 @@ class Client:
                     print('EXCEPTION!', exc)
                     print('--> ', line)
                     raise exc
+                if message.command == 'PING':
+                    self.sendcmd('PONG', message.params)
                 await self.queue.put(
                     Event('message', message))
 
