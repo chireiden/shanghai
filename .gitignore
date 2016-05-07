@@ -92,3 +92,4 @@ ENV/
 .idea/
 .install-deps
 .develop
+shanghai.ini
