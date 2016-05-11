@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/knitori/shanghai.svg?branch=master)](https://travis-ci.org/knitori/shanghai)
+[![Build Status](https://travis-ci.org/chireiden/shanghai.svg?branch=master)](https://travis-ci.org/chireiden/shanghai)
 
 # Shanghai (multi server asyncio IRC bot)
 
