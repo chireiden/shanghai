@@ -29,7 +29,7 @@ class Client:
 
     async def close(self, quitmsg=None):
         if quitmsg:
-            self.sendline('QUIT :{}'.format(quitmsg))
+            self.sendcmd('QUIT', quitmsg)
         self.writer.write_eof()
         await self.writer.drain()
 
