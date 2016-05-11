@@ -87,8 +87,8 @@ class Network:
         realname = self.config['realname']
         while '?' in nickname:
             nickname = nickname.replace('?', str(random.randrange(10)), 1)
-        self.client.sendline('NICK {}'.format(nickname))
-        self.client.sendline('USER {} * * :{}'.format(user, realname))
+        self.client.sendcmd('NICK', nickname)
+        self.client.sendcmd('USER', user, '*', '*', realname)
         self.registered = True
 
     async def stop_running(self):
@@ -125,11 +125,11 @@ class Network:
                     # join test channel
                     for channel in self.config['autojoin']:
                         if channel.key:
-                            self.client.sendline(
-                                'JOIN {} {}'.format(*channel))
+                            self.client.sendcmd(
+                                'JOIN', channel.channel, channel.key)
                         else:
-                            self.client.sendline(
-                                'JOIN {}'.format(channel.channel))
+                            self.client.sendcmd(
+                                'JOIN', channel.channel)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
