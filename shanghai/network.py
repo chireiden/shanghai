@@ -34,6 +34,10 @@ class Network:
         self.config = config
         self.current_server = -1
         self.registered = False
+        self.nickname = None
+        self.user = None
+        self.realname = None
+        self.vhost = None
         self.runner_task = None
         self.worker_task = None
         self.queue = None
@@ -42,6 +46,10 @@ class Network:
 
     def reset(self):
         self.registered = False
+        self.nickname = None
+        self.user = None
+        self.realname = None
+        self.vhost = None
 
         self.runner_task = None
         self.worker_task = None
@@ -82,13 +90,16 @@ class Network:
 
     async def register(self):
         # testing
-        nickname = self.config['nick']
-        user = self.config['user']
-        realname = self.config['realname']
-        while '?' in nickname:
-            nickname = nickname.replace('?', str(random.randrange(10)), 1)
-        self.client.sendcmd('NICK', nickname)
-        self.client.sendcmd('USER', user, '*', '*', realname)
+        self.nickname = self.config['nick']
+        self.user = self.config['user']
+        self.realname = self.config['realname']
+        while '?' in self.nickname:
+            self.nickname = self.nickname.replace(
+                '?', str(random.randrange(10)), 1)
+        self.client.sendcmd('NICK', self.nickname)
+        self.client.sendcmd('USER', self.user, '*', '*', self.realname)
+        # should check for errors (e.g. invalid/used nickname) before
+        # setting `registered` this to true.
         self.registered = True
 
     async def stop_running(self):
@@ -122,6 +133,8 @@ class Network:
             if event.name == 'message':
                 message = event.value
                 if message.command == '001':
+                    self.nickname = message.params[0]
+                    self.client.sendcmd('MODE', self.nickname, '+B')
                     # join test channel
                     for channel in self.config['autojoin']:
                         if channel.key:
