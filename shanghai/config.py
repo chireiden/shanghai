@@ -1,85 +1,92 @@
 
-from collections import namedtuple
-import configparser
+import ruamel.yaml
 
-Server = namedtuple('Server', 'host port ssl')
-Channel = namedtuple('Channel', 'channel key')
+
+class ConfigurationError(ValueError):
+    pass
+
+
+class NamedConfig:
+    def __init__(self, name, **kwargs):
+        self.name = name
+        self._kwargs = kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def __repr__(self):
+        args = ', '.join('{}={!r}'.format(k, v) for
+                         k, v in self._kwargs.items())
+        return '{}({})'.format(self.name, args)
 
 
 class Configuration:
 
-    def __init__(self, filename):
-        self.parser = configparser.ConfigParser(
-            allow_no_value=True,
-            comment_prefixes=(';', '%'),
-        )
+    def __init__(self, yaml_config):
+        self._yaml = yaml_config
+
+    def __getattr__(self, item):
+        return self._yaml[item]
+
+    @classmethod
+    def from_filename(cls, filename):
         with open(filename, 'r', encoding='utf-8') as f:
-            self.parser.read_file(f)
+            yaml_config = ruamel.yaml.safe_load(f)
+        return cls(yaml_config)
 
-    def get_section(self, name):
-        values = {}
-        for key, value in self.parser[name].items():
-            if value.rstrip(' \t').startswith('\n'):
-                lines_raw = value.splitlines()
-                lines = []
-                for line in lines_raw:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    lines.append(line)
-                value = lines
-            values[key] = value
-        return values
+    @classmethod
+    def clone_with_merge(cls, base: dict, additions: dict):
+        target = {k: v for k, v in base.items()}
+        for key, value in additions.items():
+            if isinstance(value, dict):
+                value = cls.clone_with_merge(base.get(key, {}), value)
+            target[key] = value
+        return target
 
     @staticmethod
-    def parse_autojoin(autojoin_raw):
-        if isinstance(autojoin_raw, str):
-            autojoin_raw = [autojoin_raw]
-        autojoin = []
-        for channel in autojoin_raw:
-            if not channel.strip():
-                continue
-            channel, *rest = channel.split()
-            key = None
-            if rest:
-                key = rest[0]
-            autojoin.append(Channel(channel, key))
-        return autojoin
-
-    @staticmethod
-    def parse_servers(server_list):
-        if isinstance(server_list, str):
-            server_list = [server_list]
-        servers = []
-        for server in server_list:
-            if not server.strip():
-                continue
-            port = 6667
-            ssl = False
-            host = server
-            if ':' in server:
-                host, port = server.split(':', 1)
-                if port.startswith('+'):
-                    port = port[1:]
-                    ssl = True
-                port = int(port)
-            servers.append(Server(host, port, ssl))
-        return servers
+    def _network_config_sanity_tests(network_key, config):
+        keys = set(config)
+        needed_keys = {'name', 'nick', 'user', 'realname', 'servers'}
+        diff = needed_keys - keys
+        if diff:
+            raise ConfigurationError(
+                'Network {!r} is missing the following options: {}'.format(
+                    network_key, ', '.join(diff)))
 
     @property
     def networks(self):
-        global_config = self.get_section('global')
-        global_config['autojoin'] = self.parse_autojoin(
-            global_config.get('autojoin', []))
+        global_config = self._yaml.get('networks', {}).get('GLOBAL', {})
+        default_server = dict(
+            port=6667,
+            ssl=False,
+        )
 
-        for network, servers in self.get_section('networks').items():
+        for network_key, network_conf in \
+                self._yaml.get('networks', {}).items():
+            if network_key == 'GLOBAL':
+                continue
 
-            try:
-                values = self.get_section('network.' + network)
-            except KeyError:
-                values = {}
-            values['autojoin'] = self.parse_autojoin(
-                values.get('autojoin', []))
-            values['servers'] = self.parse_servers(servers)
+            if 'channels' not in network_conf:
+                network_conf['channels'] = {}
 
-            yield {'name': network, 'config': {**global_config, **values}}
+            for channel, channel_conf in network_conf['channels'].items():
+                if channel_conf is None:
+                    network_conf['channels'][channel] = channel_conf = {}
+                # replace channel names 'foobar' with '#foobar'
+                if not channel.startswith(('#', '&', '+', '!')):
+                    del network_conf['channels'][channel]
+                    network_conf['channels']['#{}'.format(channel)] = \
+                        channel_conf
+
+            if 'servers' not in network_conf:
+                raise ConfigurationError('Network {!r} has no server'.format(
+                    network_conf['name']))
+
+            server_list = []
+            for server in network_conf['servers']:
+                server = NamedConfig('Server', **{**default_server, **server})
+                server_list.append(server)
+            network_conf['servers'] = server_list
+
+            config = self.clone_with_merge(global_config, network_conf)
+            self._network_config_sanity_tests(network_key, config)
+            yield {'name': network_key, 'config': config}

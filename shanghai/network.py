@@ -62,7 +62,7 @@ class Network:
         self.current_server = (self.current_server + 1) % \
             len(self.config['servers'])
         server = self.config['servers'][self.current_server]
-        print(self.name, 'Jumping server', server)
+        print(self.name, 'Using server', server)
         return server
 
     def runner_task_done(self, task):
@@ -136,13 +136,12 @@ class Network:
                     self.nickname = message.params[0]
                     self.client.sendcmd('MODE', self.nickname, '+B')
                     # join test channel
-                    for channel in self.config['autojoin']:
-                        if channel.key:
-                            self.client.sendcmd(
-                                'JOIN', channel.channel, channel.key)
+                    for channel, chanconf in self.config['channels'].items():
+                        key = chanconf.get('key', None)
+                        if key is not None:
+                            self.client.sendcmd('JOIN', channel, key)
                         else:
-                            self.client.sendcmd(
-                                'JOIN', channel.channel)
+                            self.client.sendcmd('JOIN', channel)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
