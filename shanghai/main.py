@@ -22,7 +22,7 @@ def main():
         print('\033[32;1mUsing uvloop event loop.\033[0m')
         asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
-    config = Configuration('shanghai.ini')
+    config = Configuration.from_filename('shanghai.yaml')
     bot = Shanghai(config)
     tasks = list(bot.init_networks())
     loop = asyncio.get_event_loop()

@@ -1,0 +1,52 @@
+
+networks:
+  GLOBAL:
+    # serves as base for each network
+    # networks can overwrite any setting here.
+    nick: Shanghai
+    ident: cherry
+    realname: Shanghai Margatroid
+    owner: Nitori
+    enable:
+      - urlinfo
+      - fun
+    ignore:
+      - "*bot*!*@*"
+      - "*!*bot*@*"
+      - "*!*@*bot*"
+
+  freenode:
+    name: Freenode
+    servers:
+      irc.freenode.net:
+        port: 6697
+        ssl: true
+    channels:
+      # if name does not start with one of #&+ the # symbol is implied.
+      # leave empty or use keyword null, if no options
+      botted:
+      foochannel: null
+      otherchannel:
+        key: some_key
+        disable:
+          - urlinfo
+      '##foobar':  # some channels on freenode require two ## so use quotes
+
+  euirc:
+    name: euIRC
+    servers:
+      irc.euirc.net:
+        ssl: true  # default port 6697 on ssl?
+        ignore_invalid_cert: true
+        # or perhaps: accept_selfsigned_cert: true
+    channels:
+      botted:
+
+plugins:
+  urlinfo:
+    timeout: 5s
+    types:
+      - danbooru
+      - youtube
+      - matroska
+      - default

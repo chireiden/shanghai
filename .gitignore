@@ -93,3 +93,4 @@ ENV/
 .install-deps
 .develop
 shanghai.ini
+shanghai.yaml

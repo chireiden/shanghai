@@ -29,7 +29,9 @@ setup(
 
     # Requirements
     setup_requires=['pip'],
-    install_requires=[],
+    install_requires=[
+        'ruamel.yaml',
+    ],
     tests_require=['pytest', 'flake8'],
 
     # Scripts and execution
