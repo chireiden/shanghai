@@ -5,6 +5,7 @@ import random
 
 from .client import Client
 from .event import Event
+from .irc import Options
 
 
 class Context:
@@ -43,6 +44,7 @@ class Network:
         self.user = None
         self.realname = None
         self.vhost = None
+        self.options = Options()
 
         self.runner_task = None
         self.worker_task = None
@@ -135,6 +137,13 @@ class Network:
                             self.client.sendcmd('JOIN', channel, key)
                         else:
                             self.client.sendcmd('JOIN', channel)
+                elif message.command == '005':
+                    for option in message.params[1:-1]:
+                        if '=' in option:
+                            key, value = option.split('=', 1)
+                        else:
+                            key, value = option, True
+                        self.options[key] = value
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along

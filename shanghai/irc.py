@@ -101,3 +101,29 @@ class Message:
             '{s.__class__.__name__}({s.command!r}, prefix={s.prefix!r},'
             ' params={s.params!r}, tags={s.tags!r})'.format(s=self)
         )
+
+
+class Options:
+    """A simple case insensitive mapping of 005 options reply."""
+
+    def __init__(self):
+        self._options = {}
+
+    def __setitem__(self, key, value):
+        self._options[key.lower()] = value
+
+    def __setattr__(self, key, value):
+        self._options[key.lower()] = value
+
+    def __getitem__(self, item):
+        return self._options[item.lower()]
+
+    def __getattr__(self, item):
+        return self._options[item.lower()]
+
+    def __repr__(self):
+        text = '{}(\n'.format(self.__class__.__name__)
+        for key, value in sorted(self._options.items()):
+            text += '    {}={!r}\n'.format(key, value)
+        text += ')'
+        return text
