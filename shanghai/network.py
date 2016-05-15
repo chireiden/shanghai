@@ -33,13 +33,6 @@ class Network:
         self.name = name
         self.config = config
         self.current_server = -1
-        self.registered = False
-        self.nickname = None
-        self.user = None
-        self.realname = None
-        self.vhost = None
-        self.runner_task = None
-        self.worker_task = None
         self.queue = None
         self.client = None
         self.reset()
