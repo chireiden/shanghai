@@ -2,7 +2,7 @@
 
 # Shanghai (multi server asyncio IRC bot)
 
-IRC: [Freenode #chireiden](irc://irc.freenode.net/chireiden)
+IRC: #chireiden @ Freenode
 
 ## Some Notes
 
