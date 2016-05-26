@@ -120,10 +120,7 @@ class Options:
             self._options[key.lower()] = value
 
     def __getitem__(self, item):
-        if item in self._fields:
-            super().__getattr__(item)
-        else:
-            return self._options[item.lower()]
+        return self._options[item.lower()]
 
     def __getattr__(self, item):
         return self._options[item.lower()]
