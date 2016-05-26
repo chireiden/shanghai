@@ -105,6 +105,7 @@ class Message:
 
 class Options:
     """A simple case insensitive mapping of 005 options reply."""
+    _fields = ('_options')
 
     def __init__(self):
         self._options = {}
@@ -113,10 +114,16 @@ class Options:
         self._options[key.lower()] = value
 
     def __setattr__(self, key, value):
-        self._options[key.lower()] = value
+        if key in self._fields:
+            super().__setattr__(key, value)
+        else:
+            self._options[key.lower()] = value
 
     def __getitem__(self, item):
-        return self._options[item.lower()]
+        if item in self._fields:
+            super().__getattr__(item)
+        else:
+            return self._options[item.lower()]
 
     def __getattr__(self, item):
         return self._options[item.lower()]
