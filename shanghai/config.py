@@ -82,8 +82,12 @@ class Configuration:
                     network_conf['name']))
 
             server_list = []
-            for server in network_conf['servers']:
-                server = NamedConfig('Server', **{**default_server, **server})
+            for host, server_opts in network_conf['servers'].items():
+                server_dict = {**default_server,
+                               'host': host,
+                               **(server_opts if server_opts is not None
+                                  else {})}
+                server = NamedConfig('Server', **server_dict)
                 server_list.append(server)
             network_conf['servers'] = server_list
 
