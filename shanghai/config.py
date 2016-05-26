@@ -35,7 +35,7 @@ class Configuration:
 
     @classmethod
     def clone_with_merge(cls, base: dict, additions: dict):
-        target = {k: v for k, v in base.items()}
+        target = base.copy()
         for key, value in additions.items():
             if isinstance(value, dict):
                 value = cls.clone_with_merge(base.get(key, {}), value)
