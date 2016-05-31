@@ -5,8 +5,7 @@ import random
 
 from .client import Client
 from .event import Event
-from .irc import Options
-from .irc_reply import ServerReply
+from .irc import Options, ServerReply
 
 
 class Context:
