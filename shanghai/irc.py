@@ -1,4 +1,7 @@
 
+from .irc_reply import ServerReply
+
+
 ESCAPE_SEQUENCES = {
     'n': '\n',
     'r': '\r',
@@ -76,7 +79,12 @@ class Message:
             prefix = name, ident, host
 
         command, *line = line.split(None, 1)
-        command = command.upper()
+        command = command.upper()  # TODO check if really case-insensitive
+        if command.isdigit():
+            try:
+                command = ServerReply(command)
+            except ValueError:
+                print("unknown server reply code", command)
 
         params = []
         if line:

@@ -6,6 +6,7 @@ import random
 from .client import Client
 from .event import Event
 from .irc import Options
+from .irc_reply import ServerReply
 
 
 class Context:
@@ -127,9 +128,10 @@ class Network:
             context = Context(event, self, self.client)  # noqa
             if event.name == 'message':
                 message = event.value
-                if message.command == '001':
+                if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
                     self.client.sendcmd('MODE', self.nickname, '+B')
+
                     # join test channel
                     for channel, chanconf in self.config['channels'].items():
                         key = chanconf.get('key', None)
@@ -137,7 +139,8 @@ class Network:
                             self.client.sendcmd('JOIN', channel, key)
                         else:
                             self.client.sendcmd('JOIN', channel)
-                elif message.command == '005':
+
+                elif message.command == ServerReply.RPL_ISUPPORT:
                     for option in message.params[1:-1]:
                         if '=' in option:
                             key, value = option.split('=', 1)
