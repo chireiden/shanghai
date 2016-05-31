@@ -69,12 +69,10 @@ class Message:
             name = prefix[1:]
             ident = None
             host = None
-            if '!' in name:
-                name, ident = name.split('!', 1)
-                if '@' in ident:
-                    ident, host = ident.split('@', 1)
-            elif '@' in name:
+            if '@' in name:
                 name, host = name.split('@', 1)
+                if '!' in name:
+                    name, ident = name.split('!', 1)
             prefix = name, ident, host
 
         command, *line = line.split(None, 1)
