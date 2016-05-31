@@ -1,15 +1,26 @@
 import enum
 
 
-@enum.unique
 class ServerReply(str, enum.Enum):
+
+    """An Enum for numeric server replies, stored as strings.
+
+    Largely based on RFC1459_ and RFC2812_ with slight modifications
+    according to <https://www.alien.net.au/irc/irc2numerics.html>.
+
+    .. _RFC1459: https://tools.ietf.org/html/rfc1459
+    .. _RFC2812: https://tools.ietf.org/html/rfc2812
+    """
+
     # Command responses
     # https://tools.ietf.org/html/rfc2812#section-5.1
     RPL_WELCOME = '001'
     RPL_YOURHOST = '002'
     RPL_CREATED = '003'
     RPL_MYINFO = '004'
-    RPL_BOUNCE = '005'
+    # http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
+    RPL_ISUPPORT = '005'
+    RPL_BOUNCE = '005'  # deprecated
 
     RPL_USERHOST = '302'
     RPL_ISON = '303'
