@@ -1,15 +1,19 @@
 import enum
 
 
+# @enum.unique
 class ServerReply(str, enum.Enum):
 
     """An Enum for numeric server replies, stored as strings.
 
     Largely based on RFC1459_ and RFC2812_ with slight modifications
-    according to <https://www.alien.net.au/irc/irc2numerics.html>.
+    according to `some web list`_.
+    Further additions from IRCv3_.
 
     .. _RFC1459: https://tools.ietf.org/html/rfc1459
     .. _RFC2812: https://tools.ietf.org/html/rfc2812
+    .. _some web list: https://www.alien.net.au/irc/irc2numerics.html
+    .. _IRCv3: http://ircv3.net/irc/
     """
 
     # Command responses
@@ -191,3 +195,24 @@ class ServerReply(str, enum.Enum):
     RPL_STATSDLINE = '250'
 
     ERR_NOSERVICEHOST = '492'
+
+    # IRCv3
+    # http://ircv3.net/specs/extensions/sasl-3.1.html
+    RPL_LOGGEDIN = '900'
+    RPL_LOGGEDOUT = '901'
+    ERR_NICKLOCKED = '902'
+    RPL_SASLSUCCESS = '903'
+    ERR_SASLFAIL = '904'
+    ERR_SASLTOOLONG = '905'
+    ERR_SASLABORTED = '906'
+    ERR_SASLALREADY = '907'
+    RPL_SASLMECHS = '908'
+    # http://ircv3.net/specs/extensions/tls-3.1.html
+    RPL_STARTTLS = '670'
+    ERR_STARTTLS = '691'
+    # http://ircv3.net/specs/core/monitor-3.2.html
+    RPL_MONONLINE = '730'
+    RPL_MONOFFLINE = '731'
+    RPL_MONLIST = '732'
+    RPL_ENDOFMONLIST = '733'
+    ERR_MONLISTFULL = '734'
