@@ -12,7 +12,7 @@ class Context:
     """Sample Context class
 
     Provide some environment for each event (e.g. network, client)."""
-    # TODO: Move this class into it's own file later
+    # TODO: Move this class into its own file later
 
     def __init__(self,
                  event: Event,
