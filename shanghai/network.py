@@ -1,7 +1,7 @@
 
 import asyncio
 import itertools
-import random
+import re
 
 from .client import Client
 from .event import Event
@@ -83,19 +83,15 @@ class Network:
             await asyncio.sleep(seconds)
             self.reset()
 
-    async def register(self):
+    def start_register(self):
         # testing
-        self.nickname = self.config['nick']
+        self.original_nickname = self.nickname = self.config['nick']
         self.user = self.config['user']
         self.realname = self.config['realname']
-        while '?' in self.nickname:
-            self.nickname = self.nickname.replace(
-                '?', str(random.randrange(10)), 1)
         self.client.sendcmd('NICK', self.nickname)
         self.client.sendcmd('USER', self.user, '*', '*', self.realname)
-        # should check for errors (e.g. invalid/used nickname) before
-        # setting `registered` this to true.
-        self.registered = True
+        # TODO add listener for ERR_NICKNAMEINUSE here;
+        # maybe also add a listener for RPL_WELCOME to clear this listener
 
     async def stop_running(self):
         await self.queue.put(Event('close_now', None))
@@ -110,12 +106,11 @@ class Network:
         assert event.name == "connected"
         # self.client = event.value
         print(self.name, event)
-
         running = True
-        while running:
-            if not self.registered:
-                await self.register()
 
+        # start register process
+        self.start_register()
+        while running:
             event = await self.queue.get()
             print(self.name, event)
             if event.name == 'disconnected':
@@ -127,6 +122,7 @@ class Network:
             context = Context(event, self, self.client)  # noqa
             if event.name == 'message':
                 message = event.value
+
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
                     self.client.sendcmd('MODE', self.nickname, '+B')
@@ -141,6 +137,15 @@ class Network:
 
                 elif message.command == ServerReply.RPL_ISUPPORT:
                     self.options.extend_from_message(message)
+
+                elif message.command == ServerReply.ERR_NICKNAMEINUSE:
+                    # TODO move this handler somewhere else
+                    def inc_suffix(m):
+                        num = m.group(1) or 0
+                        return str(int(num) + 1)
+                    self.nickname = re.sub(r"(\d*)$", inc_suffix,
+                                           self.nickname)
+                    self.client.sendcmd('NICK', self.nickname)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
