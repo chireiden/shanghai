@@ -1,9 +1,10 @@
 
+from . import Message
+
+
 # TODO evaluate against specs
 # http://www.irc.org/tech_docs/005.html
 # http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
-
-
 class Options:
     """A simple case insensitive mapping of 005 RPL_ISUPPORT reply."""
     _fields = ('_options')
@@ -32,3 +33,11 @@ class Options:
             text += '    {}={!r}\n'.format(key, value)
         text += ')'
         return text
+
+    def extend_from_message(self, message: Message):
+        for option in message.params[1:-1]:
+            if '=' in option:
+                key, value = option.split('=', 1)
+            else:
+                key, value = option, True
+            self[key] = value

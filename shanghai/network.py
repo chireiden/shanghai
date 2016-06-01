@@ -140,12 +140,7 @@ class Network:
                             self.client.sendcmd('JOIN', channel)
 
                 elif message.command == ServerReply.RPL_ISUPPORT:
-                    for option in message.params[1:-1]:
-                        if '=' in option:
-                            key, value = option.split('=', 1)
-                        else:
-                            key, value = option, True
-                        self.options[key] = value
+                    self.options.extend_from_message(message)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
