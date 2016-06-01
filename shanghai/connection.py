@@ -5,7 +5,7 @@ from .event import Event
 from .irc import Message
 
 
-class Client:
+class Connection:
 
     def __init__(self, host, port, queue: asyncio.Queue, ssl=False, loop=None):
         self.host = host
@@ -20,6 +20,7 @@ class Client:
 
     def sendline(self, line):
         self.writer.write(line.encode('utf-8') + b'\r\n')
+        print("<", line)
 
     def sendcmd(self, command, *params):
         args = [command, *params]
@@ -47,6 +48,7 @@ class Client:
             except UnicodeDecodeError:
                 line = line.decode('latin1')
             line = line.strip()
+            print(">", line)
             if line:
                 try:
                     message = Message.from_line(line)
