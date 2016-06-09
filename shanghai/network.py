@@ -134,7 +134,7 @@ class Network:
                 break
 
             # create context
-            context = Context(event, self, self.connection)  # noqa
+            # context = Context(event, self, self.connection)
             if event.name == 'message':
                 message = event.value
 
