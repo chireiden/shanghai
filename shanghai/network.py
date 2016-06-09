@@ -77,8 +77,13 @@ class Network:
             self.worker_task = asyncio.ensure_future(self.worker())
             self.worker_task.add_done_callback(self.worker_task_done)
 
-            await asyncio.gather(self.runner_task, self.worker_task,
-                                 return_exceptions=True)
+            _, stopped = await asyncio.gather(self.runner_task,
+                                              self.worker_task,
+                                              return_exceptions=True)
+            if stopped is True:
+                return
+
+            # We didn't stop, so try to reconnect
             seconds = 30 * retry
             print(self.name, 'Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
@@ -107,17 +112,22 @@ class Network:
         assert event.name == "connected"
         # self.connection = event.value
         print(self.name, event)
-        running = True
+        stopped = False
 
         # start register process
         self.start_register()
-        while running:
+        while 1:
             event = await self.queue.get()
             print(self.name, event)
+            # remember to forward these event to plugins
             if event.name == 'disconnected':
+                print(self.name, 'connection closed by peer!')
                 break
             elif event.name == 'close_now':
-                running = False
+                print(self.name, 'closing connection!')
+                await self.connection.close('Normal bye bye!')
+                stopped = True
+                break
 
             # create context
             context = Context(event, self, self.connection)  # noqa
@@ -150,11 +160,6 @@ class Network:
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
-        else:
-            # we did not break, so we close normally
-            print(self.name, 'closing connection!')
-            await self.connection.close('Normal bye bye!')
 
-        if running:
-            print(self.name, 'connection closed by peer!')
         print(self.name, 'exiting.')
+        return stopped
