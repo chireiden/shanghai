@@ -65,11 +65,13 @@ class Network:
     def runner_task_done(self, task):
         print(self.name, task)
         if task.exception():
+            task.print_stack()
             self.worker_task.cancel()
 
     def worker_task_done(self, task):
         print(self.name, task)
         if task.exception():
+            task.print_stack()
             self.runner_task.cancel()
 
     async def run(self):
