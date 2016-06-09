@@ -71,7 +71,7 @@ class Network:
         if task.exception():
             self.runner_task.cancel()
 
-    async def start(self):
+    async def run(self):
         for retry in itertools.count(1):
             self.runner_task = asyncio.ensure_future(self.connection.run())
             self.runner_task.add_done_callback(self.runner_task_done)
