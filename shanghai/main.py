@@ -1,14 +1,16 @@
 
 import asyncio
+from pprint import pprint
 
 from .core import Shanghai
 from .config import Configuration
 
 
-def exception_handler(task, context):
-    print(task)
-    print(context)
-    raise context['exception']
+def exception_handler(loop, context):
+    print("exception_handler context:")
+    pprint(context)
+    if 'task' in context:
+        context['task'].print_stack()
 
 
 def main():
@@ -37,4 +39,4 @@ def main():
                             loop=loop)
         loop.run_until_complete(task)
         # wait again until networks have disconnected
-        loop.run_until_complete(network_tasks)
+        loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
