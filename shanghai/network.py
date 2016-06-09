@@ -62,12 +62,14 @@ class Network:
         return server
 
     def runner_task_done(self, task):
-        print(task)
-        self.worker_task.cancel()
+        print(self.name, task)
+        if task.exception():
+            self.worker_task.cancel()
 
     def worker_task_done(self, task):
-        print(task)
-        self.runner_task.cancel()
+        print(self.name, task)
+        if task.exception():
+            self.runner_task.cancel()
 
     async def start(self):
         for retry in itertools.count(1):
