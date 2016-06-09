@@ -31,8 +31,8 @@ class Connection:
     async def close(self, quitmsg=None):
         if quitmsg:
             self.sendcmd('QUIT', quitmsg)
-        self.writer.write_eof()
         await self.writer.drain()
+        self.writer.close()
 
     async def run(self):
         reader, writer = await asyncio.open_connection(
@@ -61,4 +61,5 @@ class Connection:
                 await self.queue.put(
                     Event('message', message))
 
+        self.writer.close()
         await self.queue.put(Event('disconnected', None))
