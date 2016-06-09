@@ -101,8 +101,8 @@ class Network:
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
-    async def stop_running(self):
-        await self.queue.put(Event('close_now', None))
+    async def stop_running(self, quitmsg=None):
+        await self.queue.put(Event('close_now', quitmsg))
 
     async def worker(self):
         """Sample worker."""
@@ -127,7 +127,7 @@ class Network:
                 break
             elif event.name == 'close_now':
                 print(self.name, 'closing connection!')
-                await self.connection.close('Normal bye bye!')
+                await self.connection.close(event.value)
                 stopped = True
                 break
 
