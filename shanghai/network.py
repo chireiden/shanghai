@@ -33,7 +33,7 @@ class Network:
     def __init__(self, name, config):
         self.name = name
         self.config = config
-        self.current_server = -1
+        self.current_server_index = -1
         self.queue = None
         self.connection = None
         self.reset()
@@ -55,9 +55,10 @@ class Network:
                                      server.ssl)
 
     def next_server(self):
-        self.current_server = (self.current_server + 1) % \
-            len(self.config['servers'])
-        server = self.config['servers'][self.current_server]
+        servers = self.config['servers']
+        self.current_server_index = ((self.current_server_index + 1)
+                                     % len(servers))
+        server = servers[self.current_server_index]
         print(self.name, 'Using server', server)
         return server
 
