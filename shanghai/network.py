@@ -1,5 +1,6 @@
 
 import asyncio
+import functools
 import itertools
 import re
 
@@ -62,25 +63,23 @@ class Network:
         print(self.name, 'Using server', server)
         return server
 
-    def runner_task_done(self, task):
-        print(self.name, task)
-        if task.exception():
-            task.print_stack()
-            self.worker_task.cancel()
-
-    def worker_task_done(self, task):
-        print(self.name, task)
-        if task.exception():
-            task.print_stack()
-            self.runner_task.cancel()
-
     async def run(self):
+        def cancel_other_task_if_failed(task, other_task):
+            print(self.name, task)
+            if task.exception():
+                task.print_stack()
+                other_task.cancel()
+
         for retry in itertools.count(1):
             self.runner_task = asyncio.ensure_future(self.connection.run())
-            self.runner_task.add_done_callback(self.runner_task_done)
-
             self.worker_task = asyncio.ensure_future(self.worker())
-            self.worker_task.add_done_callback(self.worker_task_done)
+            tasks = (self.runner_task, self.worker_task)
+
+            for task, other_task in zip(tasks, reversed(tasks)):
+                task.add_done_callback(
+                    functools.partial(cancel_other_task_if_failed,
+                                      other_task=other_task)
+                )
 
             _, stopped = await asyncio.gather(self.runner_task,
                                               self.worker_task,
