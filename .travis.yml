@@ -4,10 +4,8 @@ python:
   - "3.5"
 
 install:
-  - pip install -r requirements.txt
   - pip install -r requirements-dev.txt
   - pip install coveralls
-  - pip install flake8
   - pip install -e .
 
 before_script:
@@ -19,3 +17,12 @@ script:
 after_success:
   - coverage xml
   - coveralls
+
+notifications:
+  # email: false
+  irc:
+    channels:
+      - "chat.freenode.net#chireiden"
+    on_success: change
+    skip_join: true
+    # use_notice: true

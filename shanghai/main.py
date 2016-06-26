@@ -1,14 +1,16 @@
 
 import asyncio
+from pprint import pprint
 
 from .core import Shanghai
 from .config import Configuration
 
 
-def exception_handler(task, context):
-    print(task)
-    print(context)
-    raise context['exception']
+def exception_handler(loop, context):
+    print("exception_handler context:")
+    pprint(context)
+    if 'task' in context:
+        context['task'].print_stack()
 
 
 def main():
@@ -24,7 +26,17 @@ def main():
 
     config = Configuration.from_filename('shanghai.yaml')
     bot = Shanghai(config)
-    tasks = list(bot.init_networks())
+    network_tasks = list(bot.init_networks())
     loop = asyncio.get_event_loop()
     loop.set_exception_handler(exception_handler)
-    loop.run_until_complete(asyncio.wait(tasks))
+    try:
+        loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
+    except KeyboardInterrupt:
+        print("[!] cancelled by user")
+        # schedule close event
+        task = asyncio.wait([n['network'].stop_running("KeyboardInterrupt")
+                             for n in bot.networks.values()],
+                            loop=loop)
+        loop.run_until_complete(task)
+        # wait again until networks have disconnected
+        loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))

@@ -1,8 +1,8 @@
 
-from .irc_reply import ServerReply
+from .server_reply import ServerReply
 
 
-ESCAPE_SEQUENCES = {
+_ESCAPE_SEQUENCES = {
     'n': '\n',
     'r': '\r',
     's': ' ',
@@ -24,7 +24,7 @@ class Message:
     @staticmethod
     def escape(value):
         out_value = ''
-        sequences = {v: k for k, v in ESCAPE_SEQUENCES.items()}
+        sequences = {v: k for k, v in _ESCAPE_SEQUENCES.items()}
         for char in value:
             if char in sequences:
                 out_value += '\\' + sequences.get(char)
@@ -38,7 +38,7 @@ class Message:
         escape = False
         for char in value:
             if escape:
-                out_value += ESCAPE_SEQUENCES.get(char, char)
+                out_value += _ESCAPE_SEQUENCES.get(char, char)
                 escape = False
             else:
                 if char == '\\':
@@ -107,36 +107,3 @@ class Message:
             '{s.__class__.__name__}({s.command!r}, prefix={s.prefix!r},'
             ' params={s.params!r}, tags={s.tags!r})'.format(s=self)
         )
-
-
-# TODO evaluate against specs
-# http://www.irc.org/tech_docs/005.html
-# http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
-class Options:
-    """A simple case insensitive mapping of 005 RPL_ISUPPORT reply."""
-    _fields = ('_options')
-
-    def __init__(self):
-        self._options = {}
-
-    def __setitem__(self, key, value):
-        self._options[key.lower()] = value
-
-    def __setattr__(self, key, value):
-        if key in self._fields:
-            super().__setattr__(key, value)
-        else:
-            self._options[key.lower()] = value
-
-    def __getitem__(self, item):
-        return self._options[item.lower()]
-
-    def __getattr__(self, item):
-        return self._options[item.lower()]
-
-    def __repr__(self):
-        text = '{}(\n'.format(self.__class__.__name__)
-        for key, value in sorted(self._options.items()):
-            text += '    {}={!r}\n'.format(key, value)
-        text += ')'
-        return text

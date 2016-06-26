@@ -4,6 +4,7 @@ networks:
     # serves as base for each network
     # networks can overwrite any setting here.
     nick: Shanghai
+    user: Shanghai
     ident: cherry
     realname: Shanghai Margatroid
     owner: Nitori
