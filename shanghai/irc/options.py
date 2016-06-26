@@ -7,7 +7,7 @@ from . import Message
 # http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
 class Options:
     """A simple case insensitive mapping of 005 RPL_ISUPPORT reply."""
-    _fields = ('_options')
+    _fields = ('_options',)
 
     def __init__(self):
         self._options = {}
