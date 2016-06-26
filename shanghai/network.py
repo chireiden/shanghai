@@ -120,7 +120,7 @@ class Network:
 
         # start register process
         self.start_register()
-        while 1:
+        while True:
             event = await self.queue.get()
             print(self.name, event)
             # remember to forward these event to plugins
