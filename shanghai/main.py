@@ -73,6 +73,7 @@ def main():
             network.connection.sendline(irc_line)
 
     loop = asyncio.get_event_loop()
+    loop.set_debug(True)
     loop.set_exception_handler(exception_handler)
     loop.create_task(stdin_reader(loop, input_handler))
     try:
