@@ -1,5 +1,6 @@
 
 from .server_reply import ServerReply
+from ..logging import current_logger
 
 
 _ESCAPE_SEQUENCES = {
@@ -84,11 +85,7 @@ class Message:
             try:
                 command = ServerReply(command)
             except ValueError:
-                # TODO: how to add logging here? we currently don't have any
-                # context in messages, so we might have to reraise the error
-                # and let the parent network handle the "parse error", since
-                # it's related to the network.
-                print("unknown server reply code", command)
+                current_logger.warning("unknown server reply code", command)
 
         params = []
         if line:
