@@ -7,6 +7,7 @@ import re
 from .connection import Connection
 from .event import Event
 from .irc import Options, ServerReply
+from .logging import get_logger
 
 
 class Context:
@@ -40,6 +41,8 @@ class Network:
         self.reset()
 
     def reset(self):
+        self.logger = get_logger('network', self.name, self.config)
+
         self.registered = False
         self.nickname = None
         self.user = None
@@ -54,18 +57,19 @@ class Network:
         self.queue = asyncio.Queue()
         self.connection = Connection(server.host, server.port, self.queue,
                                      server.ssl)
+        self.connection.set_logger(self.logger)
 
     def next_server(self):
         servers = self.config['servers']
         self.current_server_index = ((self.current_server_index + 1)
                                      % len(servers))
         server = servers[self.current_server_index]
-        print(self.name, 'Using server', server)
+        self.logger.info(self.name, 'Using server', server)
         return server
 
     async def run(self):
         def cancel_other_task_if_failed(task, other_task):
-            print(self.name, task)
+            self.logger.info('cancel_other_task_if_failed', task)
             if task.exception():
                 task.print_stack()
                 other_task.cancel()
@@ -89,7 +93,7 @@ class Network:
 
             # We didn't stop, so try to reconnect
             seconds = 30 * retry
-            print(self.name, 'Retry connecting in {} seconds'.format(seconds))
+            self.logger.info('Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
             self.reset()
 
@@ -115,20 +119,20 @@ class Network:
         event = await self.queue.get()
         assert event.name == "connected"
         # self.connection = event.value
-        print(self.name, event)
+        self.logger.info(event)
         stopped = False
 
         # start register process
         self.start_register()
         while True:
             event = await self.queue.get()
-            print(self.name, event)
+            self.logger.debug(event)
             # remember to forward these event to plugins
             if event.name == 'disconnected':
-                print(self.name, 'connection closed by peer!')
+                self.logger.info('connection closed by peer!')
                 break
             elif event.name == 'close_now':
-                print(self.name, 'closing connection!')
+                self.logger.info('closing connection!')
                 await self.connection.close(event.value)
                 stopped = True
                 break
@@ -165,5 +169,5 @@ class Network:
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
-        print(self.name, 'exiting.')
+        self.logger.info('exiting.')
         return stopped

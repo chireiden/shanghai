@@ -27,6 +27,9 @@ class Configuration:
     def __getattr__(self, item):
         return self._yaml[item]
 
+    def get(self, item, default=None):
+        return self._yaml.get(item, default)
+
     @classmethod
     def from_filename(cls, filename):
         with open(filename, 'r', encoding='utf-8') as f:
@@ -64,6 +67,9 @@ class Configuration:
                 self._yaml.get('networks', {}).items():
             if network_key == 'GLOBAL':
                 continue
+
+            if 'logging' not in network_conf:
+                network_conf['logging'] = self._yaml.get('logging', {})
 
             if 'channels' not in network_conf:
                 network_conf['channels'] = {}

@@ -3,6 +3,7 @@ import asyncio
 
 from .event import Event
 from .irc import Message
+from .logging import get_logger, DummyLogger
 
 
 class Connection:
@@ -17,10 +18,14 @@ class Connection:
             self.loop = asyncio.get_event_loop()
 
         self.writer = None
+        self.logger = DummyLogger()
+
+    def set_logger(self, logger):
+        self.logger = logger
 
     def sendline(self, line):
         self.writer.write(line.encode('utf-8') + b'\r\n')
-        print("<", line)
+        self.logger.debug("<", line)
 
     def sendcmd(self, command, *params):
         args = [command, *params]
@@ -48,13 +53,12 @@ class Connection:
             except UnicodeDecodeError:
                 line = line.decode('latin1')
             line = line.strip()
-            print(">", line)
+            self.logger.debug(">", line)
             if line:
                 try:
                     message = Message.from_line(line)
                 except Exception as exc:
-                    print('EXCEPTION!', exc)
-                    print('--> ', line)
+                    self.logger.exception('-->', line)
                     raise exc
                 if message.command == 'PING':
                     self.sendcmd('PONG', *message.params)
