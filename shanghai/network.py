@@ -96,7 +96,8 @@ class Network:
 
             # We didn't stop, so try to reconnect
             seconds = 30 * retry
-            current_logger.info('Retry connecting in {} seconds'.format(seconds))
+            current_logger.info(
+                'Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
             self.reset()
         self.log_context.pop()
