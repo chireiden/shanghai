@@ -112,10 +112,16 @@ class LogContext:
         logger = logging.getLogger(
             '{}.{}'.format(context.lower(), hashed_name))
 
-        tzname = config.get('timezone', None)
-        if tzname is None and os.path.exists('/etc/timezone'):
-            with open('/etc/timezone', 'r') as f:
-                tzname = f.read().strip()
+        tzname = os.environ.get('TZ', None)
+
+        if tzname is None:
+            tzname = config.get('timezone', None)
+
+        if tzname is None:
+            tzfile = '/etc/timezone'
+            if os.path.exists(tzfile) and os.path.isfile(tzfile):
+                with open(tzfile, 'r') as f:
+                    tzname = f.read().strip()
 
         if tzname is None:
             tzname = 'UTC'
