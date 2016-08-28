@@ -3,7 +3,7 @@ import asyncio
 
 from .event import Event
 from .irc import Message
-from .logging import get_logger, DummyLogger
+from .logging import DummyLogger
 
 
 class Connection:

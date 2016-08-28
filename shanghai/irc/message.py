@@ -1,6 +1,5 @@
 
 from .server_reply import ServerReply
-from ..logging import get_logger
 
 
 _ESCAPE_SEQUENCES = {
