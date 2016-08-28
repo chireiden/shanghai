@@ -9,7 +9,7 @@ install:
   - pip install -e .
 
 before_script:
-  - flake8 .
+  - flake8 --exclude=shanghai/local.py .
 
 script:
   - py.test --cov=shanghai --cov-config .coveragerc ./tests/
