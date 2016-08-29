@@ -122,6 +122,8 @@ class LogContext:
 
         tzname = os.environ.get('TZ', None)
 
+        config = {**_LOGGING_CONFIG, **config}
+
         if tzname is None:
             tzname = config.get('timezone', None)
 
