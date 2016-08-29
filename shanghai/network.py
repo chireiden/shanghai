@@ -38,7 +38,7 @@ class Network:
         self.current_server_index = -1
         self.queue = None
         self.connection = None
-        self.log_context = None
+        self.log_context = LogContext('network', self.name, self.config)
         self.reset()
 
     def reset(self):
@@ -67,7 +67,6 @@ class Network:
         return server
 
     async def run(self):
-        self.log_context = LogContext('network', self.name, self.config)
         self.log_context.push()
 
         def cancel_other_task_if_failed(task, other_task):
