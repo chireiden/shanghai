@@ -122,7 +122,7 @@ class Network:
         # as its value
         event = await self.queue.get()
         if event.name == 'close_now':
-            print(self.name, 'Closing prematurely')
+            current_logger.info('closing connection prematurely!')
             # force runner task to except as well, because we got "close_now"
             # before "connected" a connection might not be established yet.
             # So we set an exception instead of closing the connection.
