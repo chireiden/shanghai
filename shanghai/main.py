@@ -9,11 +9,9 @@ from .logging import current_logger, LogContext
 
 def exception_handler(loop, context):
     import io
-    import contextlib
     f = io.StringIO()
-    with contextlib.redirect_stdout(f):
-        print("exception_handler context:")
-        pprint(context)
+    print("exception_handler context:", file=f)
+    pprint(context, stream=f)
     current_logger.error(f.getvalue())
     if 'task' in context:
         context['task'].print_stack()
