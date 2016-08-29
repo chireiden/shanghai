@@ -4,7 +4,7 @@ from pprint import pprint
 
 from .core import Shanghai
 from .config import Configuration
-from .logging import current_logger, LogContext
+from .logging import current_logger, LogContext, set_logging_config
 
 
 def exception_handler(loop, context):
@@ -19,7 +19,9 @@ def exception_handler(loop, context):
 
 def main():
     config = Configuration.from_filename('shanghai.yaml')
-    with LogContext('shanghai', 'main.py', config):
+    set_logging_config({key: value for key, value in config.items() if
+                        key in ('logging', 'timezone')})
+    with LogContext('shanghai', 'main.py'):
 
         try:
             import uvloop

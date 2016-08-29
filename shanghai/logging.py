@@ -11,6 +11,14 @@ import pytz
 from .local import LocalStack, LocalProxy
 
 
+_LOGGING_CONFIG = {}
+
+
+def set_logging_config(config):
+    global _LOGGING_CONFIG
+    _LOGGING_CONFIG = config
+
+
 def _print_like(func):
     @functools.wraps(func)
     def _wrap(self, *args):
@@ -80,7 +88,7 @@ class LogContext:
     def __init__(self, context, name, config=None):
         self.context = context
         self.name = name
-        self.config = {} if config is None else config
+        self.config = _LOGGING_CONFIG if config is None else config
         self.logger = None
 
     def __enter__(self):

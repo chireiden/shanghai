@@ -30,6 +30,9 @@ class Configuration:
     def get(self, item, default=None):
         return self._yaml.get(item, default)
 
+    def items(self):
+        return self._yaml.items()
+
     @classmethod
     def from_filename(cls, filename):
         with open(filename, 'r', encoding='utf-8') as f:
