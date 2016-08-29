@@ -113,6 +113,13 @@ class Network:
         # first item on queue should be "connected", with the connection
         # as its value
         event = await self.queue.get()
+        if event.name == 'close_now':
+            print(self.name, 'Closing prematurely')
+            # force runner task to except as well, because we got "close_now"
+            # before "connected" a connection might not be established yet.
+            # So we set an exception instead of closing the connection.
+            self.runner_task.set_exception(event.value)
+            return True
         assert event.name == "connected"
         # self.connection = event.value
         print(self.name, event)
