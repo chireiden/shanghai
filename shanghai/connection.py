@@ -17,19 +17,11 @@ class Connection:
 
         self.writer = None
 
-    def sendline(self, line):
-        self.writer.write(line.encode('utf-8') + b'\r\n')
+    def writeline(self, line, encoding):
+        self.writer.write(line.encode(encoding) + b'\r\n')
         print("<", line)
 
-    def sendcmd(self, command, *params):
-        args = [command, *params]
-        if ' ' in args[-1]:
-            args[-1] = ':{}'.format(args[-1])
-        self.sendline(' '.join(args))
-
-    async def close(self, quitmsg=None):
-        if quitmsg:
-            self.sendcmd('QUIT', quitmsg)
+    async def close(self):
         await self.writer.drain()
         self.writer.close()
 

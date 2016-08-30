@@ -12,20 +12,18 @@ from .irc import Message, Options, ServerReply
 class Context:
     """Sample Context class
 
-    Provide some environment for each event (e.g. network, connection)."""
+    Provide some environment for each event (e.g. network)."""
     # TODO: Move this class into its own file later
 
     def __init__(self,
                  event: Event,
-                 network: 'Network',
-                 connection: Connection):
+                 network: 'Network'):
         self.event = event
         self.network = network
-        self.connection = connection
 
     def __getattr__(self, name):
         if name in ('sendline', 'sendcmd', 'close'):
-            return getattr(self.connection, name)
+            return getattr(self.network, name)
 
 
 class Network:
@@ -37,7 +35,6 @@ class Network:
         self.current_server_index = -1
         self.queue = None
         self.connection = None
-        print(self.config)
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
         self.reset()
@@ -101,8 +98,8 @@ class Network:
         self.original_nickname = self.nickname = self.config['nick']
         self.user = self.config['user']
         self.realname = self.config['realname']
-        self.connection.sendcmd('NICK', self.nickname)
-        self.connection.sendcmd('USER', self.user, '*', '*', self.realname)
+        self.sendcmd('NICK', self.nickname)
+        self.sendcmd('USER', self.user, '*', '*', self.realname)
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
@@ -148,33 +145,33 @@ class Network:
                     print('--> ', line)
                     raise exc
                 if message.command == 'PING':
-                    self.connection.sendcmd('PONG', *message.params)
+                    self.sendcmd('PONG', *message.params)
                 await self.queue.put(Event('message', message))
             elif event.name == 'disconnected':
                 print(self.name, 'connection closed by peer!')
                 break
             elif event.name == 'close_now':
                 print(self.name, 'closing connection!')
-                await self.connection.close(event.value)
+                await self.close(event.value)
                 stopped = True
                 break
 
             # create context
-            # context = Context(event, self, self.connection)
+            # context = Context(event, self)
             if event.name == 'message':
                 message = event.value
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
-                    self.connection.sendcmd('MODE', self.nickname, '+B')
+                    self.sendcmd('MODE', self.nickname, '+B')
 
                     # join test channel
                     for channel, chanconf in self.config['channels'].items():
                         key = chanconf.get('key', None)
                         if key is not None:
-                            self.connection.sendcmd('JOIN', channel, key)
+                            self.sendcmd('JOIN', channel, key)
                         else:
-                            self.connection.sendcmd('JOIN', channel)
+                            self.sendcmd('JOIN', channel)
 
                 elif message.command == ServerReply.RPL_ISUPPORT:
                     self.options.extend_from_message(message)
@@ -186,10 +183,25 @@ class Network:
                         return str(int(num) + 1)
                     self.nickname = re.sub(r"(\d*)$", inc_suffix,
                                            self.nickname)
-                    self.connection.sendcmd('NICK', self.nickname)
+                    self.sendcmd('NICK', self.nickname)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
         print(self.name, 'exiting.')
         return stopped
+
+    def sendline(self, line):
+        self.connection.writeline(line + '\r\n', self.encoding)
+        print("<", line)
+
+    def sendcmd(self, command, *params):
+        args = [command, *params]
+        if ' ' in args[-1]:
+            args[-1] = ':{}'.format(args[-1])
+        self.sendline(' '.join(args))
+
+    async def close(self, quitmsg=None):
+        if quitmsg:
+            self.sendcmd('QUIT', quitmsg)
+        await self.connection.close()
