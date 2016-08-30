@@ -2,7 +2,6 @@
 import asyncio
 
 from .event import Event
-from .irc import Message
 
 
 class Connection:
@@ -43,23 +42,10 @@ class Connection:
 
         while not reader.at_eof():
             line = await reader.readline()
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError:
-                line = line.decode('latin1')
             line = line.strip()
             print(">", line)
             if line:
-                try:
-                    message = Message.from_line(line)
-                except Exception as exc:
-                    print('EXCEPTION!', exc)
-                    print('--> ', line)
-                    raise exc
-                if message.command == 'PING':
-                    self.sendcmd('PONG', *message.params)
-                await self.queue.put(
-                    Event('message', message))
+                await self.queue.put(Event('raw_line', line))
 
         self.writer.close()
         await self.queue.put(Event('disconnected', None))

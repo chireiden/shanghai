@@ -6,7 +6,7 @@ import re
 
 from .connection import Connection
 from .event import Event
-from .irc import Options, ServerReply
+from .irc import Message, Options, ServerReply
 
 
 class Context:
@@ -37,6 +37,9 @@ class Network:
         self.current_server_index = -1
         self.queue = None
         self.connection = None
+        print(self.config)
+        self.encoding = self.config.get('encoding', 'utf-8')
+        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
         self.reset()
 
     def reset(self):
@@ -130,8 +133,24 @@ class Network:
         while True:
             event = await self.queue.get()
             print(self.name, event)
+
             # remember to forward these event to plugins
-            if event.name == 'disconnected':
+            if event.name == 'raw_line':
+                try:
+                    line = event.value.decode(self.encoding)
+                except UnicodeDecodeError:
+                    line = event.value.decode(self.fallback_encoding,
+                                              'replace')
+                try:
+                    message = Message.from_line(line)
+                except Exception as exc:
+                    print('EXCEPTION!', exc)
+                    print('--> ', line)
+                    raise exc
+                if message.command == 'PING':
+                    self.connection.sendcmd('PONG', *message.params)
+                await self.queue.put(Event('message', message))
+            elif event.name == 'disconnected':
                 print(self.name, 'connection closed by peer!')
                 break
             elif event.name == 'close_now':

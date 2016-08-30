@@ -17,6 +17,9 @@ networks:
       - "*!*@*bot*"
 
   freenode:
+    # utf-8 + fallback latin1 is default anyway, but as example here.
+    encoding: utf-8
+    fallback_encoding: latin1
     name: Freenode
     servers:
       irc.freenode.net:
