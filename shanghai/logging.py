@@ -144,17 +144,22 @@ class LogContext:
             date=now
         )
 
-        file_handler = FileHandler(
-            'logs/{context}-{name}-{date:%Y-%m}.log'.format(**name_attributes))
-        stream_handler = logging.StreamHandler()
-
         formatter = Formatter(context, name, tz=timezone)
 
-        file_handler.setFormatter(formatter)
-        stream_handler.setFormatter(formatter)
+        disable_logging = config.get('disable-logging', False)
+        disable_logging_output = config.get('disable-logging-output', False)
 
-        logger.addHandler(file_handler)
-        logger.addHandler(stream_handler)
+        if not disable_logging:
+            file_handler = FileHandler(
+                'logs/{context}-{name}-{date:%Y-%m}.log'
+                .format(**name_attributes))
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+
+        if not disable_logging_output:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            logger.addHandler(stream_handler)
 
         level = config.get('logging', {}).get('level', 'INFO')
         logger.setLevel(level)

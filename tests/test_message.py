@@ -1,21 +1,21 @@
 
 from unittest import TestCase
 from shanghai.irc import Message, ServerReply
-# from shanghai.logging import LogContext, set_logging_config
+from shanghai.logging import LogContext, set_logging_config
 
 
 class TestMessage(TestCase):
 
     def setUp(self):
-        # TODO: implement disable logging option
-        # set_logging_config({'disable-logging': True})
-        # self.log_context = LogContext('test', 'test')
-        # self.log_context.push()
-        pass
+        set_logging_config({
+            'disable-logging': True,
+            'disable-logging-output': True,
+        })
+        self.log_context = LogContext('test', 'test')
+        self.log_context.push()
 
     def tearDown(self):
-        # self.log_context.pop()
-        pass
+        self.log_context.pop()
 
     def test_privmsg(self):
         m = Message.from_line(':nick!user@host PRIVMSG #channel :Some message')
