@@ -89,7 +89,7 @@ class LogContext:
         self.context = context
         self.name = name
         self.config = _LOGGING_CONFIG if config is None else config
-        self.logger = None
+        self.logger = self._get_logger(self.context, self.name, self.config)
 
     def __enter__(self):
         self.push()
@@ -98,9 +98,6 @@ class LogContext:
         self.pop()
 
     def push(self):
-        if self.logger is None:
-            self.logger = self._get_logger(
-                self.context, self.name, self.config)
         _logging_ctx_stack.push(self)
 
     def pop(self):
