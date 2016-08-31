@@ -7,7 +7,6 @@ import re
 from .connection import Connection
 from .event import Event
 from .irc import Message, Options, ServerReply
-from .irc import Options, ServerReply
 from .logging import LogContext, current_logger
 
 
@@ -149,8 +148,7 @@ class Network:
                 try:
                     message = Message.from_line(line)
                 except Exception as exc:
-                    print('EXCEPTION!', exc)
-                    print('--> ', line)
+                    current_logger.exception('-->', line)
                     raise exc
                 if message.command == 'PING':
                     self.sendcmd('PONG', *message.params)

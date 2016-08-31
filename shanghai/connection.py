@@ -2,7 +2,6 @@
 import asyncio
 
 from .event import Event
-from .irc import Message
 from .logging import current_logger
 
 
