@@ -1,5 +1,5 @@
 
-from . import Message
+from .message import Message
 
 
 # TODO evaluate against specs

@@ -1,5 +1,5 @@
 
-import ruamel.yaml
+from ruamel import yaml as ryaml
 
 
 class ConfigurationError(ValueError):
@@ -36,7 +36,7 @@ class Configuration:
     @classmethod
     def from_filename(cls, filename):
         with open(filename, 'r', encoding='utf-8') as f:
-            yaml_config = ruamel.yaml.safe_load(f)
+            yaml_config = ryaml.safe_load(f)
         return cls(yaml_config)
 
     @classmethod

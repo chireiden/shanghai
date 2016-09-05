@@ -16,7 +16,7 @@ class Connection:
         if self.loop is None:
             self.loop = asyncio.get_event_loop()
 
-        self.writer = None
+        self.writer = None  # type: asyncio.Writer
 
     def writeline(self, line, encoding):
         self.writer.write(line.encode(encoding) + b'\r\n')

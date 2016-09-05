@@ -5,13 +5,14 @@ import hashlib
 import io
 import logging
 import os
+import typing as t
 
 import pytz
 
 from .local import LocalStack, LocalProxy
 
 
-_LOGGING_CONFIG = {}
+_LOGGING_CONFIG = {}  # type: Dict[str, Any]
 
 
 def set_logging_config(config):
@@ -161,7 +162,7 @@ class LogContext:
         level = config.get('logging', {}).get('level', 'INFO')
         logger.setLevel(level)
 
-        logger.info('*'*50)
+        logger.info('*'* 50)
         logger.info('Opened log.'.format(date=now))
 
         return logger
@@ -175,4 +176,4 @@ def _get_current_logger():
 
 
 _logging_ctx_stack = LocalStack()
-current_logger = LocalProxy(_get_current_logger)  # type: Logger
+current_logger = t.cast(LocalProxy(_get_current_logger), Logger)
