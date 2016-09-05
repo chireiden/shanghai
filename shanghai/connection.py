@@ -2,6 +2,7 @@
 import asyncio
 
 from .event import Event
+from .logging import current_logger
 
 
 class Connection:
@@ -19,7 +20,7 @@ class Connection:
 
     def writeline(self, line, encoding):
         self.writer.write(line.encode(encoding) + b'\r\n')
-        print("<", line)
+        current_logger.debug("<", line)
 
     async def close(self):
         await self.writer.drain()
@@ -35,7 +36,7 @@ class Connection:
         while not reader.at_eof():
             line = await reader.readline()
             line = line.strip()
-            print(">", line)
+            current_logger.debug(">", line)
             if line:
                 await self.queue.put(Event('raw_line', line))
 

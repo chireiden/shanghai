@@ -1,5 +1,6 @@
 
 from .server_reply import ServerReply
+from ..logging import current_logger
 
 
 _ESCAPE_SEQUENCES = {
@@ -84,7 +85,7 @@ class Message:
             try:
                 command = ServerReply(command)
             except ValueError:
-                print("unknown server reply code", command)
+                current_logger.warning("unknown server reply code", command)
 
         params = []
         if line:

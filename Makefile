@@ -4,7 +4,7 @@
 	touch .install-deps
 
 flake: .install-deps
-	flake8 .
+	flake8 --exclude=shanghai/local.py .
 
 .develop: .install-deps $(shell find shanghai -type f)
 	pip install -e .

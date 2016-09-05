@@ -7,6 +7,7 @@ import re
 from .connection import Connection
 from .event import Event
 from .irc import Message, Options, ServerReply
+from .logging import LogContext, current_logger
 
 
 class Context:
@@ -37,6 +38,7 @@ class Network:
         self.connection = None
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+        self.log_context = LogContext('network', self.name, self.config)
         self.reset()
 
     def reset(self):
@@ -60,12 +62,14 @@ class Network:
         self.current_server_index = ((self.current_server_index + 1)
                                      % len(servers))
         server = servers[self.current_server_index]
-        print(self.name, 'Using server', server)
+        current_logger.info('Using server', server)
         return server
 
     async def run(self):
+        self.log_context.push()
+
         def cancel_other_task_if_failed(task, other_task):
-            print(self.name, task)
+            current_logger.info('cancel_other_task_if_failed', task)
             if task.exception():
                 task.print_stack()
                 other_task.cancel()
@@ -85,13 +89,16 @@ class Network:
                                               self.worker_task,
                                               return_exceptions=True)
             if stopped is True:
+                self.log_context.pop()
                 return
 
             # We didn't stop, so try to reconnect
             seconds = 30 * retry
-            print(self.name, 'Retry connecting in {} seconds'.format(seconds))
+            current_logger.info(
+                'Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
             self.reset()
+        self.log_context.pop()
 
     def start_register(self):
         # testing
@@ -114,7 +121,7 @@ class Network:
         # as its value
         event = await self.queue.get()
         if event.name == 'close_now':
-            print(self.name, 'Closing prematurely')
+            current_logger.info('closing connection prematurely!')
             # force runner task to except as well, because we got "close_now"
             # before "connected" a connection might not be established yet.
             # So we set an exception instead of closing the connection.
@@ -122,14 +129,14 @@ class Network:
             return True
         assert event.name == "connected"
         # self.connection = event.value
-        print(self.name, event)
+        current_logger.info(event)
         stopped = False
 
         # start register process
         self.start_register()
         while True:
             event = await self.queue.get()
-            print(self.name, event)
+            current_logger.debug(event)
 
             # remember to forward these event to plugins
             if event.name == 'raw_line':
@@ -141,17 +148,16 @@ class Network:
                 try:
                     message = Message.from_line(line)
                 except Exception as exc:
-                    print('EXCEPTION!', exc)
-                    print('--> ', line)
+                    current_logger.exception('-->', line)
                     raise exc
                 if message.command == 'PING':
                     self.sendcmd('PONG', *message.params)
                 await self.queue.put(Event('message', message))
             elif event.name == 'disconnected':
-                print(self.name, 'connection closed by peer!')
+                current_logger.info('connection closed by peer!')
                 break
             elif event.name == 'close_now':
-                print(self.name, 'closing connection!')
+                current_logger.info('closing connection!')
                 await self.close(event.value)
                 stopped = True
                 break
@@ -188,7 +194,7 @@ class Network:
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
-        print(self.name, 'exiting.')
+        current_logger.info('exiting.')
         return stopped
 
     def sendline(self, line):

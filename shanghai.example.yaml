@@ -1,4 +1,8 @@
 
+# set global logging level
+logging:
+  level: INFO
+
 networks:
   GLOBAL:
     # serves as base for each network
@@ -17,6 +21,9 @@ networks:
       - "*!*@*bot*"
 
   freenode:
+    logging:
+      # set network wide logging level. if not specified global level is used.
+      level: DEBUG
     # utf-8 + fallback latin1 is default anyway, but as example here.
     encoding: utf-8
     fallback_encoding: latin1
