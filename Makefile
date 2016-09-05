@@ -11,10 +11,10 @@ flake: .install-deps
 	touch .develop
 
 test: flake .develop
-	py.test -s -v --cov=shanghai --cov-config .coveragerc ./tests/
+	py.test -s -v --cov=shanghai --cov-config .coveragerc .
 
 install:
 	python -m pip install -U pip
 	pip install -r dev-requirements.txt
 
-.PHONY: all flake test vtest
+.PHONY: flake test install
