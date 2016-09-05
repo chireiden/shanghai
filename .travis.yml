@@ -3,20 +3,16 @@ language: python
 python:
   - "3.5"
 
-install:
-  - pip install -r dev-requirements.txt
-  - pip install coveralls
-  - pip install -e .
+env:
+  - TOXENV=py35-coveralls
+  - TOXENV=flake8
+  - TOXENV=mypy
 
-before_script:
-  - flake8 --exclude=shanghai/local.py .
+install:
+  - pip install tox
 
 script:
-  - py.test --cov=shanghai --cov-config .coveragerc ./tests/
-
-after_success:
-  - coverage xml
-  - coveralls
+  - tox
 
 notifications:
   # email: false
