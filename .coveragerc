@@ -1,1 +1,7 @@
 [run]
+# branch = True
+source =
+    shanghai
+omit =
+  shanghai/local.py
+  **/__main__.py
