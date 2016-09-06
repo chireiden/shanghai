@@ -55,8 +55,8 @@ def main():
     config = Configuration.from_filename('shanghai.yaml')
     set_logging_config({key: value for key, value in config.items() if
                         key in ('logging', 'timezone')})
-    with LogContext('shanghai', 'main.py'):
 
+    with LogContext('shanghai', 'main.py'):
         try:
             import uvloop
         except ImportError:
