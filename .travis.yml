@@ -4,15 +4,19 @@ python:
   - "3.5"
 
 env:
-  - TOXENV=py35-coveralls
+  - TOXENV=py35
   - TOXENV=flake8
   - TOXENV=mypy
 
 install:
   - pip install tox
+  - pip install coveralls
 
 script:
   - tox
+
+after_success:
+  - coveralls
 
 notifications:
   # email: false
