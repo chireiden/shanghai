@@ -199,8 +199,7 @@ class Network:
         return stopped
 
     def sendline(self, line):
-        self.connection.writeline(line + '\r\n', self.encoding)
-        print("<", line)
+        self.connection.writeline(line.encode(self.encoding))
 
     def sendcmd(self, command, *params):
         args = [command, *params]

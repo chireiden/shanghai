@@ -18,9 +18,10 @@ class Connection:
 
         self.writer = None  # type: asyncio.Writer
 
-    def writeline(self, line, encoding):
-        self.writer.write(line.encode(encoding) + b'\r\n')
-        current_logger.debug("<", line)
+    def writeline(self, line):
+        current_logger.info("<", line)
+        self.writer.write(line)
+        self.writer.write(b'\r\n')
 
     async def close(self):
         await self.writer.drain()
