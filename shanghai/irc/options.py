@@ -1,5 +1,6 @@
 
 from .message import Message
+from .server_reply import ServerReply
 
 
 # TODO evaluate against specs
@@ -35,6 +36,7 @@ class Options:
         return text
 
     def extend_from_message(self, message: Message):
+        assert Message.command == ServerReply.RPL_ISUPPORT
         for option in message.params[1:-1]:
             if '=' in option:
                 key, value = option.split('=', 1)
