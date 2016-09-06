@@ -1,11 +1,15 @@
 [![Build Status](https://travis-ci.org/chireiden/shanghai.svg?branch=master)](https://travis-ci.org/chireiden/shanghai)
 [![Coverage Status](https://coveralls.io/repos/github/chireiden/shanghai/badge.svg?branch=master)](https://coveralls.io/github/chireiden/shanghai?branch=master)
 
-# Shanghai (multi server asyncio IRC bot)
+# Shanghai (multi-server asyncio IRC bot)
 
 IRC: #chireiden @ Freenode
 
 ## Some Notes
+
+**Work In Progress**
+
+The following is likely outdated.
 
 ### Primary structure
 
