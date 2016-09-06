@@ -116,6 +116,7 @@ class Network:
     async def worker(self):
         """Sample worker."""
         self.registered = False
+        stopped = False
 
         # first item on queue should be "connected", with the connection
         # as its value
@@ -127,10 +128,10 @@ class Network:
             # So we set an exception instead of closing the connection.
             self.runner_task.set_exception(event.value)
             return True
-        assert event.name == "connected"
-        # self.connection = event.value
-        current_logger.info(event)
-        stopped = False
+        else:
+            assert event.name == "connected"
+            assert self.connection == event.value
+            current_logger.info("connected!")
 
         # start register process
         self.start_register()
