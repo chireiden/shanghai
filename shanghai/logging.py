@@ -162,7 +162,7 @@ class LogContext:
         level = config.get('logging', {}).get('level', 'INFO')
         logger.setLevel(level)
 
-        logger.info('*'* 50)
+        logger.info('*' * 50)
         logger.info('Opened log.'.format(date=now))
 
         return logger
