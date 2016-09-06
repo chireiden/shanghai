@@ -7,7 +7,8 @@ from .logging import current_logger
 
 class Connection:
 
-    def __init__(self, host, port, queue: asyncio.Queue, ssl=False, loop=None):
+    def __init__(self, host: str, port: int, queue: asyncio.Queue,
+                 ssl: bool = False, loop: asyncio.AbstractEventLoop = None):
         self.host = host
         self.port = port
         self.queue = queue
@@ -18,7 +19,7 @@ class Connection:
 
         self.writer = None  # type: asyncio.Writer
 
-    def writeline(self, line):
+    def writeline(self, line: bytes):
         current_logger.info("<", line)
         self.writer.write(line)
         self.writer.write(b'\r\n')

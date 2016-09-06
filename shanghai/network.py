@@ -110,10 +110,10 @@ class Network:
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
-    async def stop_running(self, quitmsg=None):
+    async def stop_running(self, quitmsg: str = None):
         await self.queue.put(Event('close_now', quitmsg))
 
-    async def worker(self):
+    async def worker(self) -> bool:
         """Sample worker."""
         self.registered = False
         stopped = False
@@ -198,16 +198,16 @@ class Network:
         current_logger.info('exiting.')
         return stopped
 
-    def sendline(self, line):
+    def sendline(self, line: str):
         self.connection.writeline(line.encode(self.encoding))
 
-    def sendcmd(self, command, *params):
+    def sendcmd(self, command: str, *params: str):
         args = [command, *params]
         if ' ' in args[-1]:
             args[-1] = ':{}'.format(args[-1])
         self.sendline(' '.join(args))
 
-    async def close(self, quitmsg=None):
+    async def close(self, quitmsg: str = None):
         if quitmsg:
             self.sendcmd('QUIT', quitmsg)
         await self.connection.close()
