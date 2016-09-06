@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/chireiden/shanghai.svg?branch=master)](https://travis-ci.org/chireiden/shanghai)
+[![Coverage Status](https://coveralls.io/repos/github/chireiden/shanghai/badge.svg?branch=master)](https://coveralls.io/github/chireiden/shanghai?branch=master)
 
 # Shanghai (multi server asyncio IRC bot)
 
