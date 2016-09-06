@@ -78,7 +78,7 @@ def main():
                     print("network '{}' not found".format(nw_name))
                     return
                 network = bot.networks[nw_name]['network']
-                network.connection.sendline(irc_line)
+                network.sendline(irc_line)
 
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
