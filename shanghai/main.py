@@ -16,6 +16,8 @@ def exception_handler(loop, context):
     current_logger.error(f.getvalue())
     if 'task' in context:
         context['task'].print_stack()
+    elif 'future' in context:
+        context['future'].print_stack()
 
 
 async def stdin_reader(loop, input_handler):
