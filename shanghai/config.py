@@ -60,14 +60,14 @@ class Configuration:
 
     @property
     def networks(self):
-        global_config = self._yaml.get('networks', {}).get('GLOBAL', {})
+        networks_ = self._yaml.get('networks', {})
+        global_config = networks_.get('GLOBAL', {})
         default_server = dict(
             port=6667,
             ssl=False,
         )
 
-        for network_key, network_conf in \
-                self._yaml.get('networks', {}).items():
+        for network_key, network_conf in networks_.items():
             if network_key == 'GLOBAL':
                 continue
 
