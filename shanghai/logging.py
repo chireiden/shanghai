@@ -176,4 +176,4 @@ def _get_current_logger():
 
 
 _logging_ctx_stack = LocalStack()
-current_logger = t.cast(LocalProxy(_get_current_logger), Logger)
+current_logger = t.cast(Logger, LocalProxy(_get_current_logger))
