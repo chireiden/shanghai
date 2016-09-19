@@ -1,6 +1,6 @@
 
-.install-deps: requirements-dev.txt
-	pip install -U -r requirements-dev.txt
+.install-deps: dev-requirements.txt
+	pip install -U -r dev-requirements.txt
 	touch .install-deps
 
 flake: .install-deps
@@ -11,10 +11,10 @@ flake: .install-deps
 	touch .develop
 
 test: flake .develop
-	py.test -s -v --cov=shanghai --cov-config .coveragerc ./tests/
+	py.test -s -v --cov=shanghai --cov-config .coveragerc .
 
 install:
-	pip install -U pip
-	pip install -U -r requirements-dev.txt
+	python -m pip install -U pip
+	pip install -r dev-requirements.txt
 
-.PHONY: all flake test vtest
+.PHONY: flake test install

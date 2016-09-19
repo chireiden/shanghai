@@ -25,7 +25,7 @@ setup(
     author_email='lps@chireiden.net',
 
     classifiers=classifiers,
-    zip_safe=False,
+    zip_safe=True,
 
     # Requirements
     setup_requires=['pip'],
@@ -35,6 +35,7 @@ setup(
     tests_require=['pytest', 'flake8'],
 
     # Scripts and execution
+    packages=['shanghai'],
     entry_points={
         'console_scripts': [
             'shanghai=shanghai.main:main'
