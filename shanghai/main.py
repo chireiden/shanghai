@@ -13,11 +13,11 @@ def exception_handler(loop, context):
     f = io.StringIO()
     print("exception_handler context:", file=f)
     pprint(context, stream=f)
-    current_logger.error(f.getvalue())
     if 'task' in context:
-        context['task'].print_stack()
+        context['task'].print_stack(file=f)
     elif 'future' in context:
-        context['future'].print_stack()
+        context['future'].print_stack(file=f)
+    current_logger.error(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
