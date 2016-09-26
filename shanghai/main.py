@@ -60,18 +60,17 @@ def main():
         try:
             import uvloop
         except ImportError:
-            # TODO: use a proper terminal color tool in the future (e.g.
-            # colorama) ... and possibly hook it up with the logging module.
-            current_logger.debug('\033[32;1mUsing default event loop.\033[0m')
+            current_logger.debug('Using default event loop.')
         else:
-            current_logger.debug('\033[32;1mUsing uvloop event loop.\033[0m')
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            current_logger.debug('Using uvloop event loop.')
 
         bot = Shanghai(config)
         network_tasks = list(bot.init_networks())
         print("networks:", ", ".join(bot.networks.keys()))
 
         async def input_handler(line):
+            """Handle stdin input while running. Send lines to networks."""
             if ' ' not in line:
                 return
             nw_name, irc_line = line.split(None, 1)
@@ -90,7 +89,7 @@ def main():
         try:
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
         except KeyboardInterrupt:
-            current_logger.info("[!] cancelled by user")
+            current_logger.warn("[!] cancelled by user")
             # schedule close event
             task = asyncio.wait([n['network'].stop_running("KeyboardInterrupt")
                                  for n in bot.networks.values()],
@@ -98,4 +97,5 @@ def main():
             loop.run_until_complete(task)
             # wait again until networks have disconnected
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
+
         current_logger.info('Closing now.')
