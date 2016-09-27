@@ -192,7 +192,7 @@ class LogContext:
 
         if not disable_logging_output:
             terminal_formatter = Formatter(context, name, tz=timezone,
-                                          terminal=True)
+                                           terminal=True)
             stream_handler = logging.StreamHandler()
             stream_handler.setFormatter(terminal_formatter)
             logger.addHandler(stream_handler)
