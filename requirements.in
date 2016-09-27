@@ -1,2 +1,3 @@
 ruamel.yaml
 pytz==2016.6.1
+colorama

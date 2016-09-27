@@ -1,5 +1,6 @@
 
 from datetime import datetime
+from enum import Enum
 import functools
 import hashlib
 import io
@@ -7,6 +8,7 @@ import logging
 import os
 import typing as t
 
+import colorama
 import pytz
 
 from .local import LocalStack, LocalProxy
@@ -49,13 +51,33 @@ class FileHandler(logging.FileHandler):
         super().__init__(filename, 'a', 'utf-8', None)
 
 
+class TerminalColor(str, Enum):
+
+    DEBUG = colorama.Fore.CYAN
+    INFO = colorama.Fore.GREEN
+    WARNING = colorama.Fore.YELLOW + colorama.Style.BRIGHT
+    ERROR = colorama.Fore.RED + colorama.Style.BRIGHT
+    CRITICAL = colorama.Fore.RED + colorama.Style.BRIGHT + colorama.Back.YELLOW
+
+    @classmethod
+    def for_level(cls, level):
+        names = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
+        for name in names:
+            if level >= getattr(logging, name):
+                return getattr(cls, name)
+        return ""
+
+
 class Formatter(logging.Formatter):
 
-    def __init__(self, context, name, tz):
+    def __init__(self, context, name, tz, terminal=False):
         super().__init__()
         self._context = context
         self._name = name
         self._tz = tz
+        self._terminal = terminal
+
+    _max_logging_level_length = len("CRITICAL")
 
     def format(self, record: logging.LogRecord):
         now = datetime.now(tz=self._tz)
@@ -65,9 +87,22 @@ class Formatter(logging.Formatter):
             message=record.getMessage(),
             level=record.levelname,
             date=now,
+            color_start="",
+            color_end="",
         )
-        s = '{context}/{name} - {level} [{date:%Y-%m-%d %H:%M:%S %z}]' \
-            ' {message}'.format(**data)
+        if self._terminal:
+            data['color_start'] = TerminalColor.for_level(record.levelno)
+            if data['color_start']:
+                data['color_end'] = colorama.Style.RESET_ALL
+
+        s = ("{context}/{name}"
+             " [{date:%Y-%m-%d %H:%M:%S %z}]"
+             " - "
+             "{color_start}"
+             "{level:{level_name_length}}"
+             "{message}"
+             "{color_end}"
+             ).format(level_name_length=self._max_logging_level_length, **data)
         if record.exc_info:
             # Cache the traceback text to avoid converting it multiple times
             # (it's constant anyway)
@@ -118,6 +153,7 @@ class LogContext:
         logger = logging.getLogger(
             '{}.{}'.format(context.lower(), hashed_name))
 
+        # TODO cache timezone
         tzname = os.environ.get('TZ', None)
 
         config = {**_LOGGING_CONFIG, **config}
@@ -142,21 +178,23 @@ class LogContext:
             date=now
         )
 
-        formatter = Formatter(context, name, tz=timezone)
-
         disable_logging = config.get('disable-logging', False)
         disable_logging_output = config.get('disable-logging-output', False)
 
         if not disable_logging:
+            file_formatter = Formatter(context, name, tz=timezone)
+            # TODO use rotating file handler
             file_handler = FileHandler(
                 'logs/{context}-{name}-{date:%Y-%m}.log'
                 .format(**name_attributes))
-            file_handler.setFormatter(formatter)
+            file_handler.setFormatter(file_formatter)
             logger.addHandler(file_handler)
 
         if not disable_logging_output:
+            terminal_formatter = Formatter(context, name, tz=timezone,
+                                          terminal=True)
             stream_handler = logging.StreamHandler()
-            stream_handler.setFormatter(formatter)
+            stream_handler.setFormatter(terminal_formatter)
             logger.addHandler(stream_handler)
 
         level = config.get('logging', {}).get('level', 'INFO')
