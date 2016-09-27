@@ -97,10 +97,9 @@ class Formatter(logging.Formatter):
 
         s = ("{context}/{name}"
              " [{date:%Y-%m-%d %H:%M:%S %z}]"
-             " - "
-             "{color_start}"
+             " {color_start}| "
              "{level:{level_name_length}}"
-             "{message}"
+             " | {message}"
              "{color_end}"
              ).format(level_name_length=self._max_logging_level_length, **data)
         if record.exc_info:
