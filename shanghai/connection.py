@@ -17,7 +17,7 @@ class Connection:
         if self.loop is None:
             self.loop = asyncio.get_event_loop()
 
-        self.writer = None  # type: asyncio.Writer
+        self.writer = None  # type: asyncio.StreamWriter
 
     def writeline(self, line: bytes):
         current_logger.info("<", line)
