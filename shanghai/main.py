@@ -3,6 +3,8 @@ import asyncio
 from pprint import pprint
 import sys
 
+import colorama
+
 from .core import Shanghai
 from .config import Configuration
 from .logging import current_logger, LogContext, set_logging_config
@@ -52,6 +54,8 @@ async def stdin_reader(loop, input_handler):
 
 
 def main():
+    colorama.init()
+
     config = Configuration.from_filename('shanghai.yaml')
     set_logging_config({key: value for key, value in config.items() if
                         key in ('logging', 'timezone')})
@@ -67,7 +71,7 @@ def main():
 
         bot = Shanghai(config)
         network_tasks = list(bot.init_networks())
-        print("networks:", ", ".join(bot.networks.keys()))
+        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
 
         async def input_handler(line):
             """Handle stdin input while running. Send lines to networks."""
