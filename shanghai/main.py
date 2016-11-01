@@ -10,7 +10,7 @@ from .config import Configuration
 from .logging import current_logger, LogContext, set_logging_config
 
 
-def exception_handler(loop, context):
+def exception_handler(loop, context):  # pylint: disable=unused-argument
     import io
     f = io.StringIO()
     print("exception_handler context:", file=f)
@@ -48,7 +48,7 @@ async def stdin_reader(loop, input_handler):
                 loop.create_task(input_handler(line))
 
         print("stdin stream closed")
-    except:
+    except:  # pylint: disable=bare-except
         import traceback
         traceback.print_exc()
 

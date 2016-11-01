@@ -95,13 +95,14 @@ class Formatter(logging.Formatter):
             if data['color_start']:
                 data['color_end'] = colorama.Style.RESET_ALL
 
-        s = ("{context}/{name}"
-             " [{date:%Y-%m-%d %H:%M:%S %z}]"
-             " {color_start}| "
-             "{level:{level_name_length}}"
-             " | {message}"
-             "{color_end}"
-             ).format(level_name_length=self._max_logging_level_length, **data)
+        s = (
+            "{context}/{name}"
+            " [{date:%Y-%m-%d %H:%M:%S %z}]"
+            " {color_start}| "
+            "{level:{level_name_length}}"
+            " | {message}"
+            "{color_end}"
+        ).format(level_name_length=self._max_logging_level_length, **data)
         if record.exc_info:
             # Cache the traceback text to avoid converting it multiple times
             # (it's constant anyway)
@@ -136,7 +137,10 @@ class LogContext:
         _logging_ctx_stack.push(self)
 
     def pop(self):
-        _logging_ctx_stack.pop()
+        if _logging_ctx_stack.top is self:
+            _logging_ctx_stack.pop()
+        else:
+            raise RuntimeError("Unexpected stack element; cannot pop self")
 
     @staticmethod
     def _get_logger(context, name, config):
@@ -200,7 +204,7 @@ class LogContext:
         logger.setLevel(level)
 
         logger.info('*' * 50)
-        logger.info('Opened log.'.format(date=now))
+        logger.info('Opened log.')
 
         return logger
 
