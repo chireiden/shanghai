@@ -56,6 +56,9 @@ enable=all
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use"--disable=all --enable=classes
 # --disable=W"
+#
+# https://pylint.readthedocs.io/en/latest/reference_guide/features.html
+#
 # disable=unpacking-in-except,
 #         coerce-builtin,
 #         suppressed-message,
@@ -112,6 +115,7 @@ disable=missing-docstring,
         bad-whitespace,
         invalid-name,
         too-many-instance-attributes,
+        suppressed-message,
 
 
 
