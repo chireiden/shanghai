@@ -8,6 +8,7 @@
     :copyright: (c) 2014 by the Werkzeug Team, see AUTHORS for more details.
     :license: BSD, see LICENSE for more details.
 """
+# pylint: skip-file
 import copy
 
 # since each thread has its own greenlet we can just use those as identifiers
