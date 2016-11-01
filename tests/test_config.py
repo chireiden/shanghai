@@ -1,5 +1,6 @@
 
 import io
+import os
 import re
 import tempfile
 from unittest import TestCase
@@ -111,11 +112,14 @@ class TestConfig(TestCase):
         )
 
     def test_fileloading(self):
-
-        with tempfile.NamedTemporaryFile('w+', encoding='utf-8') as f:
-            ryaml.dump(self.fake_yaml, f)
-            f.seek(0)
-            c = Configuration.from_filename(f.name)
+        # Cannot use tempfile.NamedTemporaryFile because of Windows's file locks
+        fd, fname = tempfile.mkstemp('w')
+        try:
+            with open(fd, 'w', encoding='utf-8') as f:
+                ryaml.dump(self.fake_yaml, f)
+            c = Configuration.from_filename(fname)
+        finally:
+            os.remove(fname)
 
         self.assertDictEqual(
             c._yaml,
