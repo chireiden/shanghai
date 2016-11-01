@@ -14,7 +14,7 @@ import pytz
 from .local import LocalStack, LocalProxy
 
 
-_LOGGING_CONFIG = {}  # type: Dict[str, Any]
+_LOGGING_CONFIG = {}  # type: t.Dict[str, t.Any]
 
 
 def set_logging_config(config):
