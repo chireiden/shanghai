@@ -41,7 +41,10 @@ async def stdin_reader(loop, input_handler):
             await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin)
 
             while True:
-                line_bytes = await reader.readline()
+                try:
+                    line_bytes = await reader.readline()
+                except asyncio.CancelledError:
+                    return
                 line = line_bytes.decode(sys.stdin.encoding)
                 if not line:
                     break
@@ -88,7 +91,8 @@ def main():
         loop = asyncio.get_event_loop()
         loop.set_debug(True)
         loop.set_exception_handler(exception_handler)
-        loop.create_task(stdin_reader(loop, input_handler))
+        stdin_reader_task = asyncio.ensure_future(
+            stdin_reader(loop, input_handler))
 
         try:
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
@@ -101,5 +105,8 @@ def main():
             loop.run_until_complete(task)
             # wait again until networks have disconnected
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
+
+        stdin_reader_task.cancel()
+        loop.run_until_complete(stdin_reader_task)
 
         current_logger.info('Closing now.')
