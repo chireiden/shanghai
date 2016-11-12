@@ -140,7 +140,8 @@ class LogContext:
         if _logging_ctx_stack.top is self:
             _logging_ctx_stack.pop()
         else:
-            raise RuntimeError("Unexpected stack element; cannot pop self")
+            raise RuntimeError("Unexpected stack element; "
+                               "stack top is not self")
 
     @staticmethod
     def _get_logger(context, name, config):
