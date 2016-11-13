@@ -24,4 +24,4 @@ class Shanghai:
 
     def stop_networks(self):
         for network in self.networks.values():
-            network['network'].shutdown()
+            network['network'].close()

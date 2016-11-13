@@ -1,6 +1,6 @@
 
 import asyncio
-import functools
+import io
 import itertools
 import re
 
@@ -51,6 +51,7 @@ class Network:
         self.mainloop_task = None
         self.connection_task = None
         self.worker_task = None
+        self.stopped = False
 
         server = self.next_server()
         self.queue = asyncio.Queue()
@@ -65,54 +66,49 @@ class Network:
         current_logger.info('Using server', server)
         return server
 
-    def make_log_context(self, *args, **kwargs):
+    def _make_log_context(self, *args, **kwargs):
         return LogContext('network', self.name, self.config)
 
-    @with_log_context(make_log_context)
+    @with_log_context(_make_log_context)
     async def run(self):
-
-        def cancel_other(task: asyncio.Task, other_task: asyncio.Task):
-            if not task.cancelled():
-                exception = task.exception()
-                if exception is not None:
-                    # TODO: do something with the exception(?)
-                    current_logger.error(exception)
-            if hasattr(other_task, '_just_a_flag'):
-                self.connection.force_close()
-            elif not other_task.done():
-                other_task.cancel()
 
         for retry in itertools.count(1):
             self.connection_task = asyncio.ensure_future(self.connection.run())
             self.worker_task = asyncio.ensure_future(self.worker())
-            self.connection_task._just_a_flag = True
+            self.worker_task.add_done_callback(self.worker_done)
 
-            self.connection_task.add_done_callback(
-                functools.partial(cancel_other, other_task=self.worker_task))
-            self.worker_task.add_done_callback(
-                functools.partial(cancel_other, other_task=self.connection_task))
+            try:
+                print("awaiting connection task")
+                await self.connection_task
+                print(" done awaiting")
+            except:
+                current_logger.exception("Connection Task errored")
 
-            connection_result, worker_result = await asyncio.gather(
-                self.connection_task, self.worker_task,
-                return_exceptions=True)
-
-            stopped = False
-            if not isinstance(worker_result, Exception):
-                stopped = worker_result
-
-            if stopped:
+            assert self.worker_task.done()
+            if self.stopped:
                 return
 
             # We didn't stop, so try to reconnect
             seconds = 30 * retry
-            current_logger.info(
-                'Retry connecting in {} seconds'.format(seconds))
+            current_logger.info('Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
             self.reset()
 
-    def shutdown(self):
-        self.connection.force_close()
-        self.mainloop_task.cancel()
+    def worker_done(self, task):
+        assert task is self.worker_task
+        if task.cancelled():
+            self.connection_task.cancel()
+        else:
+            exception = task.exception()
+            if exception:
+                f = io.StringIO()
+                task.print_stack(file=f)
+                current_logger.error(f.getvalue())
+                current_logger.warning("Restarting worker task")
+                self.worker_task = asyncio.ensure_future(self.worker(restarted=True))
+                self.worker_task.add_done_callback(self.worker_done)
+            else:
+                current_logger.debug("Worker task exited gracefully")
 
     def start_register(self):
         # testing
@@ -124,25 +120,18 @@ class Network:
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
-    async def stop_running(self, quitmsg: str = None):
-        await self.queue.put(Event('close_now', quitmsg))
-
-    async def worker(self) -> bool:
-        """Sample worker."""
-        self.registered = False
-        stopped = False
-
-        # first item on queue should be "connected", with the connection
+    async def init_worker(self):
+        # First item on queue should be "connected", with the connection
         # as its value
         event = await self.queue.get()
         if event.name == 'close_now':
-            current_logger.info('closing connection prematurely!')
-            # force connection task to except as well, because we got
-            # "close_now" before "connected" a connection might not be
-            # established yet. So we set an exception instead of closing the
-            # connection.
-            self.connection_task.set_exception(event.value)
-            return True
+            current_logger.info('closing connection prematurely')
+            # Cancel connection task runner task to except as well, because we got "close_now"
+            # before "connected" a connection might not be established yet.
+            # So we set an exception instead of closing the connection.
+            self.connection_task.cancel()
+            self.stopped = True
+            return
         else:
             assert event.name == "connected"
             assert self.connection == event.value
@@ -150,7 +139,14 @@ class Network:
 
         # start register process
         self.start_register()
-        while True:
+
+    async def worker(self, restarted=False) -> bool:
+        """Sample worker."""
+
+        if not restarted:
+            await self.init_worker()
+
+        while not self.stopped:
             event = await self.queue.get()
             current_logger.debug(event)
 
@@ -173,9 +169,8 @@ class Network:
                 current_logger.info('connection closed by peer!')
                 break
             elif event.name == 'close_now':
-                current_logger.info('closing connection!')
-                await self.close(event.value)
-                stopped = True
+                current_logger.info('closing connection')
+                self.close(event.value)
                 break
 
             # create context
@@ -214,7 +209,6 @@ class Network:
             # TODO: pass the context along
 
         current_logger.info('exiting.')
-        return stopped
 
     def sendline(self, line: str):
         self.connection.writeline(line.encode(self.encoding))
@@ -225,7 +219,8 @@ class Network:
             args[-1] = ':{}'.format(args[-1])
         self.sendline(' '.join(args))
 
-    async def close(self, quitmsg: str = None):
+    def close(self, quitmsg: str = None):
         if quitmsg:
             self.sendcmd('QUIT', quitmsg)
-        await self.connection.close()
+        self.connection.close()
+        self.stopped = True
