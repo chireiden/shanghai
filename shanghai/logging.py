@@ -210,7 +210,7 @@ class LogContext:
         return logger
 
 
-def async_deco(log_context_factory):
+def with_log_context(log_context_factory):
 
     def real_deco(func):
         @functools.wraps(func)

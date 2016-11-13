@@ -7,7 +7,7 @@ import re
 from .connection import Connection
 from .event import Event
 from .irc import Message, Options, ServerReply
-from .logging import LogContext, current_logger, async_deco
+from .logging import LogContext, current_logger, with_log_context
 
 
 class Context:
@@ -68,7 +68,7 @@ class Network:
     def make_log_context(self, *args, **kwargs):
         return LogContext('network', self.name, self.config)
 
-    @async_deco(make_log_context)
+    @with_log_context(make_log_context)
     async def run(self):
 
         def cancel_other(task: asyncio.Task, other_task: asyncio.Task):
