@@ -210,6 +210,20 @@ class LogContext:
         return logger
 
 
+def with_log_context(log_context_factory):
+
+    def real_deco(func):
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            log_context = log_context_factory(*args, **kwargs)
+            with log_context:
+                return await func(*args, **kwargs)
+
+        return wrapper
+
+    return real_deco
+
+
 def _get_current_logger():
     top = _logging_ctx_stack.top
     if top is None:

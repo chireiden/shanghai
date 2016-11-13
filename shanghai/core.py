@@ -20,3 +20,7 @@ class Shanghai:
                 network=network,
             )
             yield network_task
+
+    def stop_networks(self):
+        for network in self.networks.values():
+            network['network'].close()

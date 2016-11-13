@@ -1,7 +1,9 @@
 
+import traceback
 import asyncio
 from pprint import pprint
 import sys
+import io
 
 import colorama
 
@@ -11,15 +13,15 @@ from .logging import current_logger, LogContext, set_logging_config
 
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
-    import io
     f = io.StringIO()
     print("exception_handler context:", file=f)
     pprint(context, stream=f)
+    traceback.print_exc(file=f)
     if 'task' in context:
         context['task'].print_stack(file=f)
     elif 'future' in context:
         context['future'].print_stack(file=f)
-    current_logger.error(f.getvalue())
+    print(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
@@ -99,12 +101,10 @@ def main():
         except KeyboardInterrupt:
             current_logger.warn("[!] cancelled by user")
             # schedule close event
-            task = asyncio.wait([n['network'].stop_running("KeyboardInterrupt")
-                                 for n in bot.networks.values()],
-                                loop=loop)
+            bot.stop_networks()
+            task = asyncio.gather(*network_tasks, loop=loop,
+                                  return_exceptions=True)
             loop.run_until_complete(task)
-            # wait again until networks have disconnected
-            loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
 
         stdin_reader_task.cancel()
         loop.run_until_complete(stdin_reader_task)
