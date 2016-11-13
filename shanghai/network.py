@@ -137,7 +137,7 @@ class Network:
         # start register process
         self.start_register()
 
-    async def worker(self, restarted=False) -> bool:
+    async def worker(self, restarted=False):
         """Sample worker."""
 
         if not restarted:
