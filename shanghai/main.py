@@ -1,9 +1,10 @@
 
-import traceback
 import asyncio
+from functools import partial
+import io
 from pprint import pprint
 import sys
-import io
+import traceback
 
 import colorama
 
@@ -30,37 +31,29 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
 
 
 async def stdin_reader(loop, input_handler):
-    try:
-        if sys.platform == 'win32':
-            # Windows can't use SelectorEventLoop.connect_read_pipe
-            # and ProactorEventLoop.connect_read_pipe apparently
-            # doesn't work with sys.* streams or files.
-            # Instead, run polling in an executor (thread).
-            # http://stackoverflow.com/questions/31510190/aysncio-cannot-read-stdin-on-windows
-            while True:
-                line = await loop.run_in_executor(None, sys.stdin.readline)
-                if not line:
-                    break
-                loop.ensure_future(input_handler(line))
-        else:
-            reader = asyncio.StreamReader()
-            reader_protocol = asyncio.StreamReaderProtocol(reader)
-            await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin)
+    if sys.platform == 'win32':
+        # Windows can't use SelectorEventLoop.connect_read_pipe
+        # and ProactorEventLoop.connect_read_pipe apparently
+        # doesn't work with sys.* streams or files.
+        # Instead, run polling in an executor (thread).
+        # http://stackoverflow.com/questions/31510190/aysncio-cannot-read-stdin-on-windows
+        while True:
+            line = await loop.run_in_executor(None, sys.stdin.readline)
+            if not line:
+                break
+            loop.ensure_future(input_handler(line))
+    else:
+        reader = asyncio.StreamReader()
+        await loop.connect_read_pipe(partial(asyncio.StreamReaderProtocol, reader), sys.stdin)
 
-            while True:
-                try:
-                    line_bytes = await reader.readline()
-                except asyncio.CancelledError:
-                    return
-                line = line_bytes.decode(sys.stdin.encoding)
-                if not line:
-                    break
-                loop.ensure_future(input_handler(line))
+        while True:
+            line_bytes = await reader.readline()
+            line = line_bytes.decode(sys.stdin.encoding)
+            if not line:
+                break
+            loop.ensure_future(input_handler(line))
 
-        print("stdin stream closed")
-    except:  # pylint: disable=bare-except
-        import traceback
-        traceback.print_exc()
+    print("stdin stream closed")
 
 
 def main():
