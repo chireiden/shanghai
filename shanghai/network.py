@@ -77,9 +77,7 @@ class Network:
             self.worker_task.add_done_callback(self.worker_done)
 
             try:
-                print("awaiting connection task")
                 await self.connection_task
-                print(" done awaiting")
             except:
                 current_logger.exception("Connection Task errored")
 
@@ -87,8 +85,8 @@ class Network:
             if self.stopped:
                 return
 
-            # We didn't stop, so try to reconnect
-            seconds = 30 * retry
+            # We didn't stop, so try to reconnect after a timeout
+            seconds = 10 * retry
             current_logger.info('Retry connecting in {} seconds'.format(seconds))
             await asyncio.sleep(seconds)
             self.reset()
