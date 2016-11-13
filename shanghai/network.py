@@ -7,7 +7,7 @@ import re
 from .connection import Connection
 from .event import Event
 from .irc import Message, Options, ServerReply
-from .logging import LogContext, current_logger
+from .logging import LogContext, current_logger, async_deco
 
 
 class Context:
@@ -38,7 +38,6 @@ class Network:
         self.connection = None
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
-        self.log_context = LogContext('network', self.name, self.config)
         self.reset()
 
     def reset(self):
@@ -66,8 +65,11 @@ class Network:
         current_logger.info('Using server', server)
         return server
 
+    def make_log_context(self, *args, **kwargs):
+        return LogContext('network', self.name, self.config)
+
+    @async_deco(make_log_context)
     async def run(self):
-        self.log_context.push()
 
         def cancel_other(task: asyncio.Task, other_task: asyncio.Task):
             if not task.cancelled():
@@ -99,18 +101,14 @@ class Network:
                 stopped = worker_result
 
             if stopped:
-                self.log_context.pop()
                 return
 
             # We didn't stop, so try to reconnect
             seconds = 30 * retry
             current_logger.info(
                 'Retry connecting in {} seconds'.format(seconds))
-            self.log_context.pop()
             await asyncio.sleep(seconds)
-            self.log_context.push()
             self.reset()
-        self.log_context.pop()
 
     def shutdown(self):
         self.connection.force_close()
