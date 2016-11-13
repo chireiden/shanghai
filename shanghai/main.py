@@ -81,8 +81,11 @@ def main():
 
         bot = Shanghai(config)
         network_tasks = list(bot.init_networks())
-        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.set_exception_handler(exception_handler)
 
+        # For debugging purposes mainly
         async def input_handler(line):
             """Handle stdin input while running. Send lines to networks."""
             if ' ' not in line:
@@ -95,9 +98,7 @@ def main():
                 network = bot.networks[nw_name]['network']
                 network.sendline(irc_line)
 
-        loop = asyncio.get_event_loop()
-        loop.set_debug(True)
-        loop.set_exception_handler(exception_handler)
+        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
         stdin_reader_task = asyncio.ensure_future(
             stdin_reader(loop, input_handler))
 
