@@ -219,5 +219,7 @@ class Network:
     def close(self, quitmsg: str = None):
         if quitmsg:
             self.sendcmd('QUIT', quitmsg)
+        else:
+            self.sendcmd('QUIT')
         self.connection.close()
         self.stopped = True
