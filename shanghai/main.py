@@ -104,12 +104,14 @@ def main():
         try:
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
         except KeyboardInterrupt:
-            current_logger.warn("[!] cancelled by user")
+            current_logger.warn("cancelled by user")
             # schedule close event
             bot.stop_networks()
-            task = asyncio.gather(*network_tasks, loop=loop,
-                                  return_exceptions=True)
-            loop.run_until_complete(task)
+            task = asyncio.wait(network_tasks, loop=loop, timeout=5)
+            done, pending = loop.run_until_complete(task)
+            if pending:
+                current_logger.error("The following tasks didn't terminate within the set "
+                                     "timeout: %s", pending)
 
         stdin_reader_task.cancel()
         loop.run_until_complete(stdin_reader_task)
