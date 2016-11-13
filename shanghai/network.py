@@ -23,7 +23,8 @@ class Context:
         self.network = network
 
     def __getattr__(self, name):
-        if name in ('sendline', 'sendcmd', 'close'):
+        # TODO determine these from generators
+        if name in ('send_line', 'send_cmd', 'close'):
             return getattr(self.network, name)
 
 
@@ -112,8 +113,8 @@ class Network:
         self.original_nickname = self.nickname = self.config['nick']
         self.user = self.config['user']
         self.realname = self.config['realname']
-        self.sendcmd('NICK', self.nickname)
-        self.sendcmd('USER', self.user, '*', '*', self.realname)
+        self.send_cmd('NICK', self.nickname)
+        self.send_cmd('USER', self.user, '*', '*', self.realname)
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
@@ -160,7 +161,7 @@ class Network:
                     current_logger.exception('-->', line)
                     raise exc
                 if message.command == 'PING':
-                    self.sendcmd('PONG', *message.params)
+                    self.send_cmd('PONG', *message.params)
                 await self.queue.put(Event('message', message))
             elif event.name == 'disconnected':
                 current_logger.info('connection closed by peer!')
@@ -180,15 +181,15 @@ class Network:
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
-                    self.sendcmd('MODE', self.nickname, '+B')
+                    self.send_cmd('MODE', self.nickname, '+B')
 
                     # join test channel
                     for channel, chanconf in self.config['channels'].items():
                         key = chanconf.get('key', None)
                         if key is not None:
-                            self.sendcmd('JOIN', channel, key)
+                            self.send_cmd('JOIN', channel, key)
                         else:
-                            self.sendcmd('JOIN', channel)
+                            self.send_cmd('JOIN', channel)
 
                 elif message.command == ServerReply.RPL_ISUPPORT:
                     self.options.extend_from_message(message)
@@ -200,26 +201,26 @@ class Network:
                         return str(int(num) + 1)
                     self.nickname = re.sub(r"(\d*)$", inc_suffix,
                                            self.nickname)
-                    self.sendcmd('NICK', self.nickname)
+                    self.send_cmd('NICK', self.nickname)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
         current_logger.info('exiting.')
 
-    def sendline(self, line: str):
+    def send_line(self, line: str):
         self.connection.writeline(line.encode(self.encoding))
 
-    def sendcmd(self, command: str, *params: str):
+    def send_cmd(self, command: str, *params: str):
         args = [command, *params]
         if ' ' in args[-1]:
             args[-1] = ':{}'.format(args[-1])
-        self.sendline(' '.join(args))
+        self.send_line(' '.join(args))
 
     def close(self, quitmsg: str = None):
         if quitmsg:
-            self.sendcmd('QUIT', quitmsg)
+            self.send_cmd('QUIT', quitmsg)
         else:
-            self.sendcmd('QUIT')
+            self.send_cmd('QUIT')
         self.connection.close()
         self.stopped = True
