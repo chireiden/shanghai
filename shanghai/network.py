@@ -49,6 +49,7 @@ class Network:
         self.vhost = None
         self.options = Options()
 
+        self.mainloop_task = None
         self.runner_task = None
         self.worker_task = None
 
@@ -68,27 +69,35 @@ class Network:
     async def run(self):
         self.log_context.push()
 
-        def cancel_other_task_if_failed(task, other_task):
-            current_logger.info('cancel_other_task_if_failed', task)
-            if task.exception():
-                task.print_stack()
+        def cancel_other(task: asyncio.Task, other_task: asyncio.Task):
+            try:
+                task.exception()
+            except asyncio.CancelledError:
+                pass
+            if hasattr(other_task, '_just_a_flag'):
+                self.connection.force_close()
+            elif not other_task.done():
                 other_task.cancel()
 
         for retry in itertools.count(1):
             self.runner_task = asyncio.ensure_future(self.connection.run())
             self.worker_task = asyncio.ensure_future(self.worker())
-            tasks = (self.runner_task, self.worker_task)
+            self.runner_task._just_a_flag = True
 
-            for task, other_task in zip(tasks, reversed(tasks)):
-                task.add_done_callback(
-                    functools.partial(cancel_other_task_if_failed,
-                                      other_task=other_task)
-                )
+            self.runner_task.add_done_callback(
+                functools.partial(cancel_other, other_task=self.worker_task))
+            self.worker_task.add_done_callback(
+                functools.partial(cancel_other, other_task=self.runner_task))
 
-            _, stopped = await asyncio.gather(self.runner_task,
-                                              self.worker_task,
-                                              return_exceptions=True)
-            if stopped is True:
+            runner_result, worker_result = await asyncio.gather(
+                self.runner_task, self.worker_task,
+                return_exceptions=True)
+
+            stopped = False
+            if not isinstance(worker_result, Exception):
+                stopped = worker_result
+
+            if stopped:
                 self.log_context.pop()
                 return
 
@@ -96,9 +105,15 @@ class Network:
             seconds = 30 * retry
             current_logger.info(
                 'Retry connecting in {} seconds'.format(seconds))
+            self.log_context.pop()
             await asyncio.sleep(seconds)
+            self.log_context.push()
             self.reset()
         self.log_context.pop()
+
+    def shutdown(self):
+        self.connection.force_close()
+        self.mainloop_task.cancel()
 
     def start_register(self):
         # testing
@@ -167,6 +182,9 @@ class Network:
             # context = Context(event, self)
             if event.name == 'message':
                 message = event.value
+                if message.command == 'PRIVMSG':
+                    if message.params[-1].startswith('!except'):
+                        raise Exception('Test Exception')
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]

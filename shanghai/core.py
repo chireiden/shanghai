@@ -19,4 +19,9 @@ class Shanghai:
                 task=network_task,
                 network=network,
             )
+            network.mainloop_task = network_task
             yield network_task
+
+    def stop_networks(self):
+        for network in self.networks.values():
+            network['network'].shutdown()

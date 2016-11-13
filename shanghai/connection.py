@@ -24,6 +24,9 @@ class Connection:
         self.writer.write(line)
         self.writer.write(b'\r\n')
 
+    def force_close(self):
+        self.writer.close()
+
     async def close(self):
         await self.writer.drain()
         self.writer.close()
