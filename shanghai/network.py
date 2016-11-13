@@ -48,7 +48,6 @@ class Network:
         self.vhost = None
         self.options = Options()
 
-        self.mainloop_task = None
         self.connection_task = None
         self.worker_task = None
         self.stopped = False
