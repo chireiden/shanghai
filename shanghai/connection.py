@@ -38,12 +38,15 @@ class Connection:
 
         await self.queue.put(Event('connected', self))
 
-        while not reader.at_eof():
-            line = await reader.readline()
-            line = line.strip()
-            current_logger.debug(">", line)
-            if line:
-                await self.queue.put(Event('raw_line', line))
-
-        self.writer.close()
-        await self.queue.put(Event('disconnected', None))
+        try:
+            while not reader.at_eof():
+                line = await reader.readline()
+                line = line.strip()
+                current_logger.debug(">", line)
+                if line:
+                    await self.queue.put(Event('raw_line', line))
+        except asyncio.CancelledError:
+            current_logger.info("Connection.run cancelled")
+        finally:
+            self.close()
+            await self.queue.put(Event('disconnected', None))
