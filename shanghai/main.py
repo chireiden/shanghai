@@ -21,7 +21,7 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
         context['task'].print_stack(file=f)
     elif 'future' in context:
         context['future'].print_stack(file=f)
-    # print(f.getvalue())
+    print(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
