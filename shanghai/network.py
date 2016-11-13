@@ -49,7 +49,7 @@ class Network:
         self.options = Options()
 
         self.mainloop_task = None
-        self.runner_task = None
+        self.connection_task = None
         self.worker_task = None
 
         server = self.next_server()
@@ -83,17 +83,17 @@ class Network:
                 other_task.cancel()
 
         for retry in itertools.count(1):
-            self.runner_task = asyncio.ensure_future(self.connection.run())
+            self.connection_task = asyncio.ensure_future(self.connection.run())
             self.worker_task = asyncio.ensure_future(self.worker())
-            self.runner_task._just_a_flag = True
+            self.connection_task._just_a_flag = True
 
-            self.runner_task.add_done_callback(
+            self.connection_task.add_done_callback(
                 functools.partial(cancel_other, other_task=self.worker_task))
             self.worker_task.add_done_callback(
-                functools.partial(cancel_other, other_task=self.runner_task))
+                functools.partial(cancel_other, other_task=self.connection_task))
 
-            runner_result, worker_result = await asyncio.gather(
-                self.runner_task, self.worker_task,
+            connection_result, worker_result = await asyncio.gather(
+                self.connection_task, self.worker_task,
                 return_exceptions=True)
 
             stopped = False
@@ -137,10 +137,11 @@ class Network:
         event = await self.queue.get()
         if event.name == 'close_now':
             current_logger.info('closing connection prematurely!')
-            # force runner task to except as well, because we got "close_now"
-            # before "connected" a connection might not be established yet.
-            # So we set an exception instead of closing the connection.
-            self.runner_task.set_exception(event.value)
+            # force connection task to except as well, because we got
+            # "close_now" before "connected" a connection might not be
+            # established yet. So we set an exception instead of closing the
+            # connection.
+            self.connection_task.set_exception(event.value)
             return True
         else:
             assert event.name == "connected"
