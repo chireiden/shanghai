@@ -41,7 +41,7 @@ async def stdin_reader(loop, input_handler):
                 line = await loop.run_in_executor(None, sys.stdin.readline)
                 if not line:
                     break
-                loop.create_task(input_handler(line))
+                loop.ensure_future(input_handler(line))
         else:
             reader = asyncio.StreamReader()
             reader_protocol = asyncio.StreamReaderProtocol(reader)
@@ -55,7 +55,7 @@ async def stdin_reader(loop, input_handler):
                 line = line_bytes.decode(sys.stdin.encoding)
                 if not line:
                     break
-                loop.create_task(input_handler(line))
+                loop.ensure_future(input_handler(line))
 
         print("stdin stream closed")
     except:  # pylint: disable=bare-except
