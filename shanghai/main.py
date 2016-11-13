@@ -14,13 +14,18 @@ from .logging import current_logger, LogContext, set_logging_config
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
     f = io.StringIO()
-    print("exception_handler context:", file=f)
+    print("=== Unhandled Exception ===", file=f)
+    print("- Context -", file=f)
     pprint(context, stream=f)
     traceback.print_exc(file=f)
+    print("- Stack -", file=f)
+    # print(colorama.Fore.RED, file=f, end='')
     if 'task' in context:
         context['task'].print_stack(file=f)
     elif 'future' in context:
         context['future'].print_stack(file=f)
+    # print(colorama.Fore.RESET, file=f, end='')
+    print("===========================", file=f)
     print(f.getvalue())
 
 
