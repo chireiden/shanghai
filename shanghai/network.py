@@ -70,10 +70,11 @@ class Network:
         self.log_context.push()
 
         def cancel_other(task: asyncio.Task, other_task: asyncio.Task):
-            try:
-                task.exception()
-            except asyncio.CancelledError:
-                pass
+            if not task.cancelled():
+                exception = task.exception()
+                if exception is not None:
+                    # TODO: do something with the exception(?)
+                    current_logger.error(exception)
             if hasattr(other_task, '_just_a_flag'):
                 self.connection.force_close()
             elif not other_task.done():
