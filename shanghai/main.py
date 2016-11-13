@@ -106,8 +106,11 @@ def main():
             if pending:
                 current_logger.error("The following tasks didn't terminate within the set "
                                      "timeout: %s", pending)
+        else:
+            current_logger.info("All network tasks terminated")
 
-        stdin_reader_task.cancel()
-        loop.run_until_complete(stdin_reader_task)
+        if not stdin_reader_task.done():
+            stdin_reader_task.cancel()
+            loop.run_until_complete(asyncio.wait_for(stdin_reader_task, 5, loop=loop))
 
-        current_logger.info('Closing now.')
+        current_logger.info('Closing now')
