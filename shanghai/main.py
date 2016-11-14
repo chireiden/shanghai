@@ -70,7 +70,7 @@ async def stdin_reader(loop, input_handler):
             line = line_bytes.decode(sys.stdin.encoding)
             if not line:
                 break
-            loop.ensure_future(input_handler(line))
+            asyncio.ensure_future(input_handler(line), loop=loop)
 
         print("stdin stream closed")
 
