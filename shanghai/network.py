@@ -3,6 +3,7 @@ import asyncio
 import io
 import itertools
 import re
+import time
 
 from .connection import Connection
 from .event import Event
@@ -34,11 +35,14 @@ class Network:
     def __init__(self, name, config):
         self.name = name
         self.config = config
+        self.encoding = self.config.get('encoding', 'utf-8')
+        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+
         self.current_server_index = -1
         self.queue = None
         self.connection = None
-        self.encoding = self.config.get('encoding', 'utf-8')
-        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+        self.worker_task_failure_timestamps = []
+
         self.reset()
 
     def reset(self):
@@ -97,16 +101,25 @@ class Network:
         if task.cancelled():
             self.connection_task.cancel()
         else:
-            exception = task.exception()
-            if exception:
-                f = io.StringIO()
-                task.print_stack(file=f)
-                current_logger.error(f.getvalue())
-                current_logger.warning("Restarting worker task")
-                self.worker_task = asyncio.ensure_future(self.worker(restarted=True))
-                self.worker_task.add_done_callback(self.worker_done)
-            else:
+            if not task.exception():
                 current_logger.debug("Worker task exited gracefully")
+                return
+
+            f = io.StringIO()
+            task.print_stack(file=f)
+            current_logger.error(f.getvalue())
+
+            now = time.time()
+            self.worker_task_failure_timestamps.append(time.time())
+            if len(self.worker_task_failure_timestamps) == 5:
+                if self.worker_task_failure_timestamps.pop(0) >= now - 10:
+                    current_logger.error("Worker task exceeded exception threshold; terminating")
+                    self.close("Exception threshold exceeded")
+                    return
+
+            current_logger.warning("Restarting worker task")
+            self.worker_task = asyncio.ensure_future(self.worker(restarted=True))
+            self.worker_task.add_done_callback(self.worker_done)
 
     def start_register(self):
         # testing
