@@ -4,7 +4,6 @@ from functools import partial
 import io
 from pprint import pprint
 import sys
-import traceback
 
 import colorama
 
@@ -18,7 +17,6 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
     print("=== Unhandled Exception ===", file=f)
     print("- Context -", file=f)
     pprint(context, stream=f)
-    traceback.print_exc(file=f)
     print("- Stack -", file=f)
     # print(colorama.Fore.RED, file=f, end='')
     if 'task' in context:
