@@ -25,6 +25,7 @@ class Connection:
         self.writer.write(b'\r\n')
 
     def close(self):
+        current_logger.debug("closing connection")
         self.writer.close()
 
     async def run(self):

@@ -59,8 +59,7 @@ class Network:
 
         server = self.next_server()
         self.queue = asyncio.Queue()
-        self.connection = Connection(server.host, server.port, self.queue,
-                                     server.ssl)
+        self.connection = Connection(server.host, server.port, self.queue, server.ssl)
 
     def next_server(self):
         servers = self.config['servers']
@@ -166,8 +165,7 @@ class Network:
                 try:
                     line = event.value.decode(self.encoding)
                 except UnicodeDecodeError:
-                    line = event.value.decode(self.fallback_encoding,
-                                              'replace')
+                    line = event.value.decode(self.fallback_encoding, 'replace')
                 try:
                     message = Message.from_line(line)
                 except Exception as exc:
@@ -219,7 +217,7 @@ class Network:
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
-        current_logger.info('exiting.')
+        current_logger.debug('exiting worker task')
 
     def send_line(self, line: str):
         self.connection.writeline(line.encode(self.encoding))
@@ -231,6 +229,7 @@ class Network:
         self.send_line(' '.join(args))
 
     def close(self, quitmsg: str = None):
+        current_logger.info("closing network")
         if quitmsg:
             self.send_cmd('QUIT', quitmsg)
         else:
