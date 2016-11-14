@@ -3,6 +3,7 @@ import asyncio
 import io
 import itertools
 import re
+import time
 
 from .connection import Connection
 from .event import Event
@@ -51,6 +52,9 @@ class Network:
         self.connection_task = None
         self.worker_task = None
         self.stopped = False
+
+        self.ping_timeout_handle = None
+        self.send_ping_handle = None
 
         server = self.next_server()
         self.queue = asyncio.Queue()
@@ -117,6 +121,22 @@ class Network:
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
+    def ping_timeout(self):
+        current_logger.info('Detected ping timeout.')
+        self.connection_task.cancel()
+
+    def send_ping(self):
+        current_logger.info('Sending ping to test if connection is alive.')
+        self.sendcmd('PING', int(time.time()))
+
+    def reset_ping_timeout(self):
+        if self.ping_timeout_handle is not None:
+            self.ping_timeout_handle.cancel()
+            self.send_ping_handle.cancel()
+        loop = asyncio.get_event_loop()
+        self.ping_timeout_handle = loop.call_later(5*60, self.ping_timeout)
+        self.send_ping_handle = loop.call_later(4*60, self.send_ping)
+
     async def init_worker(self):
         # First item on queue should be "connected", with the connection
         # as its value
@@ -145,6 +165,7 @@ class Network:
 
         while not self.stopped:
             event = await self.queue.get()
+            self.reset_ping_timeout()  # as long as we get events, we're connected.
             current_logger.debug(event)
 
             # remember to forward these event to plugins
@@ -177,6 +198,8 @@ class Network:
                 if message.command == 'PRIVMSG':
                     if message.params[-1].startswith('!except'):
                         raise Exception('Test Exception')
+                    elif message.params[-1].startswith('!cancel'):
+                        self.connection_task.cancel()
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
@@ -211,7 +234,7 @@ class Network:
         self.connection.writeline(line.encode(self.encoding))
 
     def sendcmd(self, command: str, *params: str):
-        args = [command, *params]
+        args = [command, *(str(p) for p in params)]
         if ' ' in args[-1]:
             args[-1] = ':{}'.format(args[-1])
         self.sendline(' '.join(args))
