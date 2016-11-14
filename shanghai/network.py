@@ -39,6 +39,8 @@ class Network:
         self.connection = None
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+        self.ping_timeout_handle = None
+        self.send_ping_handle = None
         self.reset()
 
     def reset(self):
@@ -53,8 +55,7 @@ class Network:
         self.worker_task = None
         self.stopped = False
 
-        self.ping_timeout_handle = None
-        self.send_ping_handle = None
+        self.unset_ping_timeout_handlers()
 
         server = self.next_server()
         self.queue = asyncio.Queue()
@@ -129,13 +130,22 @@ class Network:
         current_logger.info('Sending ping to test if connection is alive.')
         self.sendcmd('PING', int(time.time()))
 
-    def reset_ping_timeout(self):
+    def unset_ping_timeout_handlers(self):
         if self.ping_timeout_handle is not None:
             self.ping_timeout_handle.cancel()
+            self.ping_timeout_handle = None
+        if self.send_ping_handle is not None:
             self.send_ping_handle.cancel()
+            self.send_ping_handle = None
+
+    def set_ping_timeout_handlers(self):
         loop = asyncio.get_event_loop()
-        self.ping_timeout_handle = loop.call_later(5*60, self.ping_timeout)
-        self.send_ping_handle = loop.call_later(4*60, self.send_ping)
+        # TODO: take timeouts from config
+        # suggestions:
+        # - ping_timeout_handle - minimun: 5 minutes; maximum: unlimited
+        # - send_ping_handle - minimum: 4 minutes; maximum: ping_timeout_handle - 1 minute
+        self.ping_timeout_handle = loop.call_later(5 * 60, self.ping_timeout)
+        self.send_ping_handle = loop.call_later(4 * 60, self.send_ping)
 
     async def init_worker(self):
         # First item on queue should be "connected", with the connection
@@ -165,7 +175,6 @@ class Network:
 
         while not self.stopped:
             event = await self.queue.get()
-            self.reset_ping_timeout()  # as long as we get events, we're connected.
             current_logger.debug(event)
 
             # remember to forward these event to plugins
@@ -194,12 +203,13 @@ class Network:
             # create context
             # context = Context(event, self)
             if event.name == 'message':
+                self.unset_ping_timeout_handlers()
+                self.set_ping_timeout_handlers()
+
                 message = event.value
                 if message.command == 'PRIVMSG':
                     if message.params[-1].startswith('!except'):
                         raise Exception('Test Exception')
-                    elif message.params[-1].startswith('!cancel'):
-                        self.connection_task.cancel()
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
