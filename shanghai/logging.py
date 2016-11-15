@@ -7,7 +7,6 @@ import io
 import logging
 import os
 import typing as t
-import traceback
 
 import colorama
 import pytz
@@ -28,12 +27,7 @@ def _print_like(func):
     def _wrap(self, *args, **kwargs):
         f = io.StringIO()
         print(*args, file=f)
-        if 'exc_info' in kwargs:
-            exc_info = kwargs.pop('exc_info')
-            if exc_info:
-                traceback.print_exc(file=f)
-
-        return func(self, f.getvalue().strip())
+        return func(self, f.getvalue().strip(), **kwargs)
     return _wrap
 
 
