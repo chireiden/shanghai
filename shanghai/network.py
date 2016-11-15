@@ -128,7 +128,7 @@ class Network:
 
     def send_ping(self):
         current_logger.info('Sending ping to test if connection is alive.')
-        self.sendcmd('PING', int(time.time()))
+        self.sendcmd('PING', str(int(time.time())))
 
     def unset_ping_timeout_handlers(self):
         if self.ping_timeout_handle is not None:
@@ -244,7 +244,7 @@ class Network:
         self.connection.writeline(line.encode(self.encoding))
 
     def sendcmd(self, command: str, *params: str):
-        args = [command, *(str(p) for p in params)]
+        args = [command, *params]
         if ' ' in args[-1]:
             args[-1] = ':{}'.format(args[-1])
         self.sendline(' '.join(args))
