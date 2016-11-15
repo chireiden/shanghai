@@ -39,7 +39,7 @@ class Connection:
             while not reader.at_eof():
                 line = await reader.readline()
                 line = line.strip()
-                current_logger.info(">", line)
+                current_logger.debug(">", line)
                 if line:
                     await self.queue.put(Event('raw_line', line))
         except asyncio.CancelledError:
