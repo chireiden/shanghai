@@ -18,12 +18,11 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
     print("- Context -", file=f)
     pprint(context, stream=f)
     print("- Stack -", file=f)
-    # print(colorama.Fore.RED, file=f, end='')
-    if 'task' in context:
-        context['task'].print_stack(file=f)
-    elif 'future' in context:
-        context['future'].print_stack(file=f)
-    # print(colorama.Fore.RESET, file=f, end='')
+    task = context.get('task', context.get('future'))
+    if hasattr(task, 'print_stack'):
+        task.print_stack(file=f)
+    else:
+        print("Cannot print stack", file=f)
     print("===========================", file=f)
     print(f.getvalue())
 
