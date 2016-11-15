@@ -27,7 +27,6 @@ networks:
     # utf-8 + fallback latin1 is default anyway, but as example here.
     encoding: utf-8
     fallback_encoding: latin1
-    name: Freenode
     servers:
       irc.freenode.net:
         port: 6697
@@ -44,7 +43,6 @@ networks:
       '##foobar':  # some channels on freenode require two ## so use quotes
 
   euirc:
-    name: euIRC
     servers:
       irc.euirc.net:
         ssl: true  # default port 6697 on ssl?
