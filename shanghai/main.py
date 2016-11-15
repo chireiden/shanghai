@@ -14,17 +14,19 @@ from .logging import current_logger, LogContext, set_logging_config
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
     f = io.StringIO()
-    print("=== Unhandled Exception ===", file=f)
-    print("- Context -", file=f)
+    print("Unhandled Exception", file=f)
+    print("-- Context --", file=f)
     pprint(context, stream=f)
-    print("- Stack -", file=f)
+
+    print("-- Stack --", file=f)
     task = context.get('task', context.get('future'))
     if hasattr(task, 'print_stack'):
         task.print_stack(file=f)
     else:
         print("Cannot print stack", file=f)
-    print("===========================", file=f)
-    print(f.getvalue())
+
+    with LogContext("main", "exception_handler", open_msg=False):
+        current_logger.error(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
@@ -81,7 +83,7 @@ def main():
     set_logging_config({key: value for key, value in config.items() if
                         key in ('logging', 'timezone')})
 
-    with LogContext('shanghai', 'main.py'):
+    with LogContext('main', 'main'):
         try:
             import uvloop
         except ImportError:

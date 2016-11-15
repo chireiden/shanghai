@@ -121,11 +121,12 @@ class Formatter(logging.Formatter):
 
 class LogContext:
 
-    def __init__(self, context, name, config=None):
+    def __init__(self, context, name, config=None, open_msg=True):
         self.context = context
         self.name = name
         self.config = _LOGGING_CONFIG if config is None else config
-        self.logger = self._get_logger(self.context, self.name, self.config)
+
+        self.logger = self._get_logger(self.context, self.name, self.config, open_msg)
 
     def __enter__(self):
         self.push()
@@ -144,7 +145,7 @@ class LogContext:
                                "stack top is not self")
 
     @staticmethod
-    def _get_logger(context, name, config):
+    def _get_logger(context, name, config, open_msg):
         """
         context: i.e. 'network', 'channel', 'core', whatvever.
         name: some preferably unique name inside of context
@@ -152,10 +153,8 @@ class LogContext:
         """
         logging.setLoggerClass(Logger)
         # use a hashed version to avoid it containing dots.
-        hashed_name = hashlib.sha256(
-            name.lower().encode('utf-8')).hexdigest()[:12]
-        logger = logging.getLogger(
-            '{}.{}'.format(context.lower(), hashed_name))
+        hashed_name = hashlib.sha256(name.lower().encode('utf-8')).hexdigest()[:12]
+        logger = logging.getLogger('{}.{}'.format(context.lower(), hashed_name))
 
         # TODO cache timezone
         tzname = os.environ.get('TZ', None)
@@ -176,14 +175,12 @@ class LogContext:
 
         timezone = pytz.timezone(tzname)
         now = datetime.now(tz=timezone)
-        name_attributes = dict(
-            context=context,
-            name=name,
-            date=now
-        )
+        name_attributes = dict(context=context, name=name, date=now)
 
         disable_logging = config.get('disable-logging', False)
         disable_logging_output = config.get('disable-logging-output', False)
+        level = config.get('logging', {}).get('level', 'INFO')
+        logger.setLevel(level)
 
         if not disable_logging:
             file_formatter = Formatter(context, name, tz=timezone)
@@ -194,18 +191,16 @@ class LogContext:
             file_handler.setFormatter(file_formatter)
             logger.addHandler(file_handler)
 
+            if open_msg:
+                # Realistically, we don't need this in a terminal
+                logger.info('*' * 50)
+                logger.info('Opened log.')
+
         if not disable_logging_output:
-            terminal_formatter = Formatter(context, name, tz=timezone,
-                                           terminal=True)
+            terminal_formatter = Formatter(context, name, tz=timezone, terminal=True)
             stream_handler = logging.StreamHandler()
             stream_handler.setFormatter(terminal_formatter)
             logger.addHandler(stream_handler)
-
-        level = config.get('logging', {}).get('level', 'INFO')
-        logger.setLevel(level)
-
-        logger.info('*' * 50)
-        logger.info('Opened log.')
 
         return logger
 
