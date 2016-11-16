@@ -1,5 +1,6 @@
 
 import ast
+import asyncio
 from collections import OrderedDict, defaultdict
 import importlib.util
 import os
@@ -45,7 +46,10 @@ class Plugin:
     async def dispatch(self, event, *args, **kwargs):
         results = []
         for func_ref in self._get_event_funcs(event):
-            results.append(await func_ref(self, *args, **kwargs))
+            if asyncio.iscoroutinefunction(func_ref):
+                results.append(await func_ref(self, *args, **kwargs))
+            else:
+                results.append(func_ref(self, *args, **kwargs))
         return results
 
     def sync_dispatch(self, event, *args, **kwargs):
