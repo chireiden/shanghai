@@ -25,7 +25,7 @@ class Context:
 
     def __getattr__(self, name):
         # TODO determine these from generators
-        if name in ('send_line', 'send_cmd', 'close'):
+        if name in ('send_line', 'send_cmd', 'request_close'):
             return getattr(self.network, name)
 
 
@@ -117,7 +117,7 @@ class Network:
             if len(self.worker_task_failure_timestamps) == 5:
                 if self.worker_task_failure_timestamps.pop(0) >= now - 10:
                     current_logger.error("Worker task exceeded exception threshold; terminating")
-                    self.close("Exception threshold exceeded")
+                    self._close("Exception threshold exceeded")
                     return
 
             current_logger.warning("Restarting worker task")
@@ -165,9 +165,9 @@ class Network:
         event = await self.queue.get()
         if event.name == 'close_now':
             current_logger.info('closing connection prematurely')
-            # Because we got "close_now" before "connected" a connection might not be
-            # established yet.
-            # So we set an exception instead of closing the connection.
+            # Because we got "close_now" before "connected",
+            # a connection has likely not been established yet.
+            # So we cancel the task instead of closing the connection.
             self.connection_task.cancel()
             self.stopped = True
             return
@@ -202,18 +202,19 @@ class Network:
                     raise exc
                 if message.command == 'PING':
                     self.send_cmd('PONG', *message.params)
-                await self.queue.put(Event('message', message))
+                event = Event('message', message)
+                await self.queue.put(event)
+
             elif event.name == 'disconnected':
                 current_logger.info('connection closed by peer!')
-                break
-            elif event.name == 'close_now':
+
+            elif event.name == 'close_request':
                 current_logger.info('closing connection')
-                self.close(event.value)
-                break
+                self._close(event.value)
 
             # create context
             # context = Context(event, self)
-            if event.name == 'message':
+            elif event.name == 'message':
                 self.unset_ping_timeout_handlers()
                 self.set_ping_timeout_handlers()
 
@@ -221,6 +222,8 @@ class Network:
                 if message.command == 'PRIVMSG':
                     if message.params[-1].startswith('!except'):
                         raise Exception('Test Exception')
+                    if message.params[-1].startswith('!quit'):
+                        await self.request_close(message.params[-1])
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
@@ -260,7 +263,7 @@ class Network:
             args[-1] = ':{}'.format(args[-1])
         self.send_line(' '.join(args))
 
-    def close(self, quitmsg: str = None):
+    def _close(self, quitmsg: str = None):
         current_logger.info("closing network")
         if quitmsg:
             self.send_cmd('QUIT', quitmsg)
@@ -268,3 +271,7 @@ class Network:
             self.send_cmd('QUIT')
         self.connection.close()
         self.stopped = True
+
+    async def request_close(self, quitmsg: str = None):
+        close_event = Event('close_request', quitmsg)
+        await self.queue.put(close_event)
