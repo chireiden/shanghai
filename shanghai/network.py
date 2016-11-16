@@ -42,6 +42,8 @@ class Network:
         self.queue = None
         self.connection = None
         self.worker_task_failure_timestamps = []
+        self.ping_timeout_handle = None
+        self.send_ping_handle = None
 
         self.reset()
 
@@ -56,6 +58,8 @@ class Network:
         self.connection_task = None
         self.worker_task = None
         self.stopped = False
+
+        self.unset_ping_timeout_handlers()
 
         server = self.next_server()
         self.queue = asyncio.Queue()
@@ -130,6 +134,31 @@ class Network:
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
+    def ping_timeout(self):
+        current_logger.info('Detected ping timeout.')
+        self.connection_task.cancel()
+
+    def send_ping(self):
+        current_logger.info('Sending ping to test if connection is alive.')
+        self.send_cmd('PING', str(int(time.time())))
+
+    def unset_ping_timeout_handlers(self):
+        if self.ping_timeout_handle is not None:
+            self.ping_timeout_handle.cancel()
+            self.ping_timeout_handle = None
+        if self.send_ping_handle is not None:
+            self.send_ping_handle.cancel()
+            self.send_ping_handle = None
+
+    def set_ping_timeout_handlers(self):
+        loop = asyncio.get_event_loop()
+        # TODO: take timeouts from config
+        # suggestions:
+        # - ping_timeout_handle - minimun: 5 minutes; maximum: unlimited
+        # - send_ping_handle - minimum: 4 minutes; maximum: ping_timeout_handle - 1 minute
+        self.ping_timeout_handle = loop.call_later(5 * 60, self.ping_timeout)
+        self.send_ping_handle = loop.call_later(4 * 60, self.send_ping)
+
     async def init_worker(self):
         # First item on queue should be "connected", with the connection
         # as its value
@@ -185,6 +214,9 @@ class Network:
             # create context
             # context = Context(event, self)
             if event.name == 'message':
+                self.unset_ping_timeout_handlers()
+                self.set_ping_timeout_handlers()
+
                 message = event.value
                 if message.command == 'PRIVMSG':
                     if message.params[-1].startswith('!except'):

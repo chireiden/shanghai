@@ -24,10 +24,10 @@ def set_logging_config(config):
 
 def _print_like(func):
     @functools.wraps(func)
-    def _wrap(self, *args):
+    def _wrap(self, *args, **kwargs):
         f = io.StringIO()
         print(*args, file=f)
-        return func(self, f.getvalue().strip())
+        return func(self, f.getvalue().strip(), **kwargs)
     return _wrap
 
 
