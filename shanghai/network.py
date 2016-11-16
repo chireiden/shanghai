@@ -3,6 +3,7 @@ import asyncio
 import io
 import itertools
 import re
+import time
 
 from .connection import Connection
 from .event import Event
@@ -23,7 +24,8 @@ class Context:
         self.network = network
 
     def __getattr__(self, name):
-        if name in ('sendline', 'sendcmd', 'close'):
+        # TODO determine these from generators
+        if name in ('send_line', 'send_cmd', 'close'):
             return getattr(self.network, name)
 
 
@@ -33,11 +35,14 @@ class Network:
     def __init__(self, name, config):
         self.name = name
         self.config = config
+        self.encoding = self.config.get('encoding', 'utf-8')
+        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+
         self.current_server_index = -1
         self.queue = None
         self.connection = None
-        self.encoding = self.config.get('encoding', 'utf-8')
-        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
+        self.worker_task_failure_timestamps = []
+
         self.reset()
 
     def reset(self):
@@ -54,8 +59,7 @@ class Network:
 
         server = self.next_server()
         self.queue = asyncio.Queue()
-        self.connection = Connection(server.host, server.port, self.queue,
-                                     server.ssl)
+        self.connection = Connection(server.host, server.port, self.queue, server.ssl)
 
     def next_server(self):
         servers = self.config['servers']
@@ -96,24 +100,33 @@ class Network:
         if task.cancelled():
             self.connection_task.cancel()
         else:
-            exception = task.exception()
-            if exception:
-                f = io.StringIO()
-                task.print_stack(file=f)
-                current_logger.error(f.getvalue())
-                current_logger.warning("Restarting worker task")
-                self.worker_task = asyncio.ensure_future(self.worker(restarted=True))
-                self.worker_task.add_done_callback(self.worker_done)
-            else:
+            if not task.exception():
                 current_logger.debug("Worker task exited gracefully")
+                return
+
+            f = io.StringIO()
+            task.print_stack(file=f)
+            current_logger.error(f.getvalue())
+
+            now = time.time()
+            self.worker_task_failure_timestamps.append(time.time())
+            if len(self.worker_task_failure_timestamps) == 5:
+                if self.worker_task_failure_timestamps.pop(0) >= now - 10:
+                    current_logger.error("Worker task exceeded exception threshold; terminating")
+                    self.close("Exception threshold exceeded")
+                    return
+
+            current_logger.warning("Restarting worker task")
+            self.worker_task = asyncio.ensure_future(self.worker(restarted=True))
+            self.worker_task.add_done_callback(self.worker_done)
 
     def start_register(self):
         # testing
         self.original_nickname = self.nickname = self.config['nick']
         self.user = self.config['user']
         self.realname = self.config['realname']
-        self.sendcmd('NICK', self.nickname)
-        self.sendcmd('USER', self.user, '*', '*', self.realname)
+        self.send_cmd('NICK', self.nickname)
+        self.send_cmd('USER', self.user, '*', '*', self.realname)
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
 
@@ -152,15 +165,14 @@ class Network:
                 try:
                     line = event.value.decode(self.encoding)
                 except UnicodeDecodeError:
-                    line = event.value.decode(self.fallback_encoding,
-                                              'replace')
+                    line = event.value.decode(self.fallback_encoding, 'replace')
                 try:
                     message = Message.from_line(line)
                 except Exception as exc:
                     current_logger.exception('-->', line)
                     raise exc
                 if message.command == 'PING':
-                    self.sendcmd('PONG', *message.params)
+                    self.send_cmd('PONG', *message.params)
                 await self.queue.put(Event('message', message))
             elif event.name == 'disconnected':
                 current_logger.info('connection closed by peer!')
@@ -180,15 +192,15 @@ class Network:
 
                 if message.command == ServerReply.RPL_WELCOME:
                     self.nickname = message.params[0]
-                    self.sendcmd('MODE', self.nickname, '+B')
+                    self.send_cmd('MODE', self.nickname, '+B')
 
                     # join test channel
                     for channel, chanconf in self.config['channels'].items():
                         key = chanconf.get('key', None)
                         if key is not None:
-                            self.sendcmd('JOIN', channel, key)
+                            self.send_cmd('JOIN', channel, key)
                         else:
-                            self.sendcmd('JOIN', channel)
+                            self.send_cmd('JOIN', channel)
 
                 elif message.command == ServerReply.RPL_ISUPPORT:
                     self.options.extend_from_message(message)
@@ -200,24 +212,27 @@ class Network:
                         return str(int(num) + 1)
                     self.nickname = re.sub(r"(\d*)$", inc_suffix,
                                            self.nickname)
-                    self.sendcmd('NICK', self.nickname)
+                    self.send_cmd('NICK', self.nickname)
 
             # TODO: dispatch event to handlers, e.g. plugins.
             # TODO: pass the context along
 
-        current_logger.info('exiting.')
+        current_logger.debug('exiting worker task')
 
-    def sendline(self, line: str):
+    def send_line(self, line: str):
         self.connection.writeline(line.encode(self.encoding))
 
-    def sendcmd(self, command: str, *params: str):
+    def send_cmd(self, command: str, *params: str):
         args = [command, *params]
         if ' ' in args[-1]:
             args[-1] = ':{}'.format(args[-1])
-        self.sendline(' '.join(args))
+        self.send_line(' '.join(args))
 
     def close(self, quitmsg: str = None):
+        current_logger.info("closing network")
         if quitmsg:
-            self.sendcmd('QUIT', quitmsg)
+            self.send_cmd('QUIT', quitmsg)
+        else:
+            self.send_cmd('QUIT')
         self.connection.close()
         self.stopped = True

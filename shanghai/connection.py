@@ -25,9 +25,12 @@ class Connection:
         self.writer.write(b'\r\n')
 
     def close(self):
+        current_logger.debug("closing connection")
         self.writer.close()
 
     async def run(self):
+        current_logger.info("connecting to {s.host}:{ssl}{s.port}..."
+                            .format(s=self, ssl="+" if self.ssl else ""))
         reader, writer = await asyncio.open_connection(
             self.host, self.port, ssl=self.ssl, loop=self.loop)
         self.writer = writer

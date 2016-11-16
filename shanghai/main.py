@@ -1,9 +1,9 @@
 
-import traceback
 import asyncio
+from functools import partial
+import io
 from pprint import pprint
 import sys
-import io
 
 import colorama
 
@@ -14,48 +14,66 @@ from .logging import current_logger, LogContext, set_logging_config
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
     f = io.StringIO()
-    print("exception_handler context:", file=f)
+    print("Unhandled Exception", file=f)
+    print("-- Context --", file=f)
     pprint(context, stream=f)
-    traceback.print_exc(file=f)
-    if 'task' in context:
-        context['task'].print_stack(file=f)
-    elif 'future' in context:
-        context['future'].print_stack(file=f)
-    print(f.getvalue())
+
+    print("-- Stack --", file=f)
+    task = context.get('task', context.get('future'))
+    if hasattr(task, 'print_stack'):
+        task.print_stack(file=f)
+    else:
+        print("Cannot print stack", file=f)
+
+    with LogContext("main", "exception_handler", open_msg=False):
+        current_logger.error(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
-    try:
-        if sys.platform == 'win32':
-            # Windows can't use SelectorEventLoop.connect_read_pipe
-            # and ProactorEventLoop.connect_read_pipe apparently
-            # doesn't work with sys.* streams or files.
-            # Instead, run polling in an executor (thread).
-            # http://stackoverflow.com/questions/31510190/aysncio-cannot-read-stdin-on-windows
-            while True:
-                line = await loop.run_in_executor(None, sys.stdin.readline)
-                if not line:
-                    break
-                loop.create_task(input_handler(line))
-        else:
-            reader = asyncio.StreamReader()
-            reader_protocol = asyncio.StreamReaderProtocol(reader)
-            await loop.connect_read_pipe(lambda: reader_protocol, sys.stdin)
+    if sys.platform == 'win32':
+        # Windows can't use SelectorEventLoop.connect_read_pipe
+        # and ProactorEventLoop.connect_read_pipe apparently
+        # doesn't work with sys.* streams or files.
+        # http://stackoverflow.com/questions/31510190/aysncio-cannot-read-stdin-on-windows
+        #
+        # Running polling in an executor (thread) doesn't work properly either
+        # since there is absolutely no way to stop the executor (sys.stdin.readline)
+        # and make the program terminate.
+        # So instead, we spawn a custom daemon thread.
+        # Fuck yeah asyncio!
+        import threading
 
+        def reader_thread():
             while True:
                 try:
-                    line_bytes = await reader.readline()
-                except asyncio.CancelledError:
-                    return
-                line = line_bytes.decode(sys.stdin.encoding)
+                    line = sys.stdin.readline()
+                except KeyboardInterrupt:
+                    # Wake the main loop to make it realize that an exception has been thrown.
+                    # This feels so dirty ...
+                    loop.call_soon_threadsafe(lambda: None, loop=loop)
+                    break
+
                 if not line:
                     break
-                loop.create_task(input_handler(line))
+                loop.call_soon_threadsafe(lambda: asyncio.ensure_future(input_handler(line),
+                                                                        loop=loop))
+
+            print("stdin stream closed")
+
+        threading.Thread(target=reader_thread, daemon=True).start()
+
+    else:
+        reader = asyncio.StreamReader()
+        await loop.connect_read_pipe(partial(asyncio.StreamReaderProtocol, reader), sys.stdin)
+
+        while True:
+            line_bytes = await reader.readline()
+            line = line_bytes.decode(sys.stdin.encoding)
+            if not line:
+                break
+            asyncio.ensure_future(input_handler(line), loop=loop)
 
         print("stdin stream closed")
-    except:  # pylint: disable=bare-except
-        import traceback
-        traceback.print_exc()
 
 
 def main():
@@ -65,7 +83,7 @@ def main():
     set_logging_config({key: value for key, value in config.items() if
                         key in ('logging', 'timezone')})
 
-    with LogContext('shanghai', 'main.py'):
+    with LogContext('main', 'main'):
         try:
             import uvloop
         except ImportError:
@@ -76,8 +94,11 @@ def main():
 
         bot = Shanghai(config)
         network_tasks = list(bot.init_networks())
-        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
+        loop = asyncio.get_event_loop()
+        loop.set_debug(True)
+        loop.set_exception_handler(exception_handler)
 
+        # For debugging purposes mainly
         async def input_handler(line):
             """Handle stdin input while running. Send lines to networks."""
             if ' ' not in line:
@@ -88,25 +109,33 @@ def main():
                     print("network '{}' not found".format(nw_name))
                     return
                 network = bot.networks[nw_name]['network']
-                network.sendline(irc_line)
+                network.send_line(irc_line)
 
-        loop = asyncio.get_event_loop()
-        loop.set_debug(True)
-        loop.set_exception_handler(exception_handler)
-        stdin_reader_task = asyncio.ensure_future(
-            stdin_reader(loop, input_handler))
+        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
+        stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))
 
         try:
             loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
         except KeyboardInterrupt:
-            current_logger.warn("[!] cancelled by user")
+            current_logger.warn("cancelled by user")
             # schedule close event
             bot.stop_networks()
-            task = asyncio.gather(*network_tasks, loop=loop,
-                                  return_exceptions=True)
-            loop.run_until_complete(task)
+            task = asyncio.wait(network_tasks, loop=loop, timeout=5)
+            done, pending = loop.run_until_complete(task)
+            if pending:
+                current_logger.error("The following tasks didn't terminate within the set "
+                                     "timeout: %s", pending)
+        else:
+            current_logger.info("All network tasks terminated")
 
-        stdin_reader_task.cancel()
-        loop.run_until_complete(stdin_reader_task)
+        if not stdin_reader_task.done():
+            stdin_reader_task.cancel()
+            try:
+                loop.run_until_complete(asyncio.wait_for(stdin_reader_task, 5, loop=loop))
+            except asyncio.CancelledError:
+                pass
+            except asyncio.TimeoutError:
+                current_logger.error("stdin_reader didn't terminate within the set timeout")
 
-        current_logger.info('Closing now.')
+        loop.close()
+        current_logger.info('Closing now')

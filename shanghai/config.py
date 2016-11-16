@@ -49,14 +49,15 @@ class Configuration:
         return target
 
     @staticmethod
-    def _network_config_sanity_tests(network_key, config):
+    def _network_config_sanity_tests(name, config):
         keys = set(config)
-        needed_keys = {'name', 'nick', 'user', 'realname', 'servers'}
+        needed_keys = {'nick', 'user', 'realname', 'servers'}
         diff = needed_keys - keys
         if diff:
             raise ConfigurationError(
-                'Network {!r} is missing the following options: {}'.format(
-                    network_key, ', '.join(diff)))
+                'Network {!r} is missing the following options: {}'
+                .format(name, ', '.join(diff))
+            )
 
     @property
     def networks(self):
@@ -67,15 +68,14 @@ class Configuration:
             ssl=False,
         )
 
-        for network_key, network_conf in networks_.items():
-            if network_key == 'GLOBAL':
+        for name, network_conf in networks_.items():
+            if name == 'GLOBAL':
                 continue
 
             if 'logging' not in network_conf:
                 network_conf['logging'] = self._yaml.get('logging', {})
 
-            if 'channels' not in network_conf:
-                network_conf['channels'] = {}
+            network_conf.setdefault('channels', {})
 
             for channel, channel_conf in network_conf['channels'].items():
                 if channel_conf is None:
@@ -83,23 +83,20 @@ class Configuration:
                 # replace channel names 'foobar' with '#foobar'
                 if not channel.startswith(('#', '&', '+', '!')):
                     del network_conf['channels'][channel]
-                    network_conf['channels']['#{}'.format(channel)] = \
-                        channel_conf
+                    network_conf['channels']['#{}'.format(channel)] = channel_conf
 
             if 'servers' not in network_conf:
-                raise ConfigurationError('Network {!r} has no server'.format(
-                    network_conf['name']))
+                raise ConfigurationError('Network {!r} has no server'.format(name))
 
             server_list = []
             for host, server_opts in network_conf['servers'].items():
-                server_dict = {**default_server,
-                               'host': host,
-                               **(server_opts if server_opts is not None
-                                  else {})}
+                server_dict = {**default_server, 'host': host}
+                if server_opts is not None:
+                    server_dict.update(server_opts)
                 server = NamedConfig('Server', **server_dict)
                 server_list.append(server)
             network_conf['servers'] = server_list
 
             config = self.clone_with_merge(global_config, network_conf)
-            self._network_config_sanity_tests(network_key, config)
-            yield {'name': network_key, 'config': config}
+            self._network_config_sanity_tests(name, config)
+            yield {'name': name, 'config': config}
