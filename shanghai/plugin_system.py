@@ -16,7 +16,7 @@ class Plugin:
 
         self.registered_events = defaultdict(list)
 
-    def register_event(self, event, func_ref, data=None, priority=0):
+    def register_event(self, event, func_ref, data=None, priority=-10):
         current_logger.debug(
             'Registering event', repr(event), 'to', self,
             'with data', repr(data), 'and priority', priority)
