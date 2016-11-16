@@ -15,6 +15,13 @@ class Plugin:
 
         self.registered_events = defaultdict(list)
 
+    def register_event(self, event, func_ref, data=None, priority=0):
+        current_logger.debug(
+            'registering event', repr(event), 'to', self,
+            'with data', repr(data), 'and priority', priority)
+        # TODO: Implement.
+        raise NotImplementedError
+
     def initialize(self):
         func_ref = getattr(self.module_or_package, 'initialize', None)
         print(self.module_or_package, dir(self.module_or_package), func_ref)
@@ -23,7 +30,7 @@ class Plugin:
         if not callable(func_ref):
             current_logger.warn("'initialize' is not callable in {!r}"
                                 .format(self.info['identifier']))
-        func_ref()
+        func_ref(self)
 
     def _get_event_funcs(self, event):
         if event in self.registered_events:
@@ -37,14 +44,14 @@ class Plugin:
     async def dispatch(self, event, *args, **kwargs):
         results = []
         for func_ref in self._get_event_funcs(event):
-            results.append(await func_ref(*args, **kwargs))
+            results.append(await func_ref(self, *args, **kwargs))
         return results
 
     def sync_dispatch(self, event, *args, **kwargs):
         """Will this even be necessary? Should we enforce the async always?"""
         results = []
         for func_ref in self._get_event_funcs(event):
-            results.append(func_ref(*args, **kwargs))
+            results.append(func_ref(self, *args, **kwargs))
         return results
 
     def __repr__(self):
@@ -66,7 +73,6 @@ class PluginSystem:
 
     plugin_registry = {}
     plugin_factory = Plugin
-    plugin_context = None
 
     @classmethod
     def load_plugin(cls, identifier):
@@ -88,8 +94,7 @@ class PluginSystem:
 
         # add to registry
         cls.plugin_registry[identifier] = plugin
-        with PluginContext(cls, plugin):
-            plugin.initialize()
+        plugin.initialize()
         return plugin
 
     @classmethod
@@ -170,28 +175,3 @@ class PluginSystem:
     @classmethod
     def dispatch_to_plugins(cls, event, *args, **kwargs):
         pass
-
-
-class PluginContext:
-    """Use 'current_plugin' thing like with logging?
-    Notes: nested plugin events.. Plugin A hooked into event of plugin B etc.
-
-    I don't think this Stack-stuff actually works with asyncio(?)
-    """
-
-    def __init__(self, plugin_system, plugin):
-        self.plugin_system = plugin_system
-        self.plugin = plugin
-
-    def __enter__(self):
-        self.plugin_system.plugin_context = self.plugin
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.plugin_system = None
-
-
-def register_event(event, func_ref, data=None, priority=0):
-    plugin = PluginSystem.plugin_context
-    print('registering events to', plugin)
-    # TODO: Implement.
-    raise NotImplementedError
