@@ -9,7 +9,7 @@ import colorama
 
 from .core import Shanghai
 from .config import Configuration
-from .logging import current_logger, LogContext, set_logging_config
+from .logging import current_logger, LogContext, set_logging_config, LogLevels
 
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
@@ -89,10 +89,12 @@ def main():
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
             current_logger.debug('Using uvloop event loop.')
 
-        bot = Shanghai(config)
-        network_tasks = list(bot.init_networks())
         loop = asyncio.get_event_loop()
-        loop.set_debug(True)
+        if current_logger.isEnabledFor(LogLevels.DEBUG):
+            loop.set_debug(True)
+
+        bot = Shanghai(config, loop)
+        network_tasks = list(bot.init_networks())
         loop.set_exception_handler(exception_handler)
 
         # For debugging purposes mainly
