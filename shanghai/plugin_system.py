@@ -17,19 +17,20 @@ class Plugin:
 
     def register_event(self, event, func_ref, data=None, priority=0):
         current_logger.debug(
-            'registering event', repr(event), 'to', self,
+            'Registering event', repr(event), 'to', self,
             'with data', repr(data), 'and priority', priority)
         # TODO: Implement.
         raise NotImplementedError
 
     def initialize(self):
         func_ref = getattr(self.module_or_package, 'initialize', None)
-        print(self.module_or_package, dir(self.module_or_package), func_ref)
         if func_ref is None:
+            current_logger.debug('No Initialization for plugin', self)
             return
         if not callable(func_ref):
-            current_logger.warn("'initialize' is not callable in {!r}"
+            current_logger.warn("'Initialize' is not callable in {!r}"
                                 .format(self.info['identifier']))
+        current_logger.debug('Initialize plugin', self)
         func_ref(self)
 
     def _get_event_funcs(self, event):
