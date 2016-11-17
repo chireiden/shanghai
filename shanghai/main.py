@@ -9,7 +9,7 @@ import colorama
 
 from .core import Shanghai
 from .config import Configuration
-from .logging import current_logger, LogContext, set_logging_config
+from .logging import current_logger, LogContext, set_logging_config, LogLevels
 
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
@@ -42,25 +42,22 @@ async def stdin_reader(loop, input_handler):
         # So instead, we spawn a custom daemon thread.
         # Fuck yeah asyncio!
         import threading
+        thread_close_evt = asyncio.Event()
 
         def reader_thread():
             while True:
                 try:
                     line = sys.stdin.readline()
                 except KeyboardInterrupt:
-                    # Wake the main loop to make it realize that an exception has been thrown.
-                    # This feels so dirty ...
-                    loop.call_soon_threadsafe(lambda: None, loop=loop)
                     break
-
                 if not line:
                     break
-                loop.call_soon_threadsafe(lambda: asyncio.ensure_future(input_handler(line),
-                                                                        loop=loop))
+                loop.call_soon_threadsafe(lambda: asyncio.ensure_future(input_handler(line)))
 
-            print("stdin stream closed")
+            loop.call_soon_threadsafe(lambda: thread_close_evt.set())
 
         threading.Thread(target=reader_thread, daemon=True).start()
+        await thread_close_evt.wait()
 
     else:
         reader = asyncio.StreamReader()
@@ -92,10 +89,12 @@ def main():
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
             current_logger.debug('Using uvloop event loop.')
 
-        bot = Shanghai(config)
-        network_tasks = list(bot.init_networks())
         loop = asyncio.get_event_loop()
-        loop.set_debug(True)
+        if current_logger.isEnabledFor(LogLevels.DEBUG):
+            loop.set_debug(True)
+
+        bot = Shanghai(config, loop)
+        network_tasks = list(bot.init_networks())
         loop.set_exception_handler(exception_handler)
 
         # For debugging purposes mainly
