@@ -1,4 +1,4 @@
 from collections import namedtuple
 
-Event = namedtuple("Event", "name value")
-Event.__new__.__defaults__ = (None,)  # Make last argument optional
+NetworkEvent = namedtuple("NetworkEvent", "name value")
+NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional

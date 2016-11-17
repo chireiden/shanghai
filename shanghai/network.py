@@ -6,7 +6,7 @@ import re
 import time
 
 from .connection import Connection
-from .event import Event
+from .event import NetworkEvent
 from .irc import Message, Options, ServerReply
 from .logging import LogContext, current_logger, with_log_context
 
@@ -18,7 +18,7 @@ class Context:
     # TODO: Move this class into its own file later
 
     def __init__(self,
-                 event: Event,
+                 event: NetworkEvent,
                  network: 'Network'):
         self.event = event
         self.network = network
@@ -202,7 +202,7 @@ class Network:
                     raise exc
                 if message.command == 'PING':
                     self.send_cmd('PONG', *message.params)
-                event = Event('message', message)
+                event = NetworkEvent('message', message)
                 await self.queue.put(event)
 
             elif event.name == 'disconnected':
@@ -273,5 +273,5 @@ class Network:
         self.stopped = True
 
     async def request_close(self, quitmsg: str = None):
-        close_event = Event('close_request', quitmsg)
+        close_event = NetworkEvent('close_request', quitmsg)
         await self.queue.put(close_event)

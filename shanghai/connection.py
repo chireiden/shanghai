@@ -1,7 +1,7 @@
 
 import asyncio
 
-from .event import Event
+from .event import NetworkEvent
 from .logging import current_logger
 
 
@@ -35,7 +35,7 @@ class Connection:
             self.host, self.port, ssl=self.ssl, loop=self.loop)
         self.writer = writer
 
-        await self.queue.put(Event('connected', self))
+        await self.queue.put(NetworkEvent('connected', self))
 
         try:
             while not reader.at_eof():
@@ -43,9 +43,9 @@ class Connection:
                 line = line.strip()
                 current_logger.debug(">", line)
                 if line:
-                    await self.queue.put(Event('raw_line', line))
+                    await self.queue.put(NetworkEvent('raw_line', line))
         except asyncio.CancelledError:
             current_logger.info("Connection.run cancelled")
         finally:
             self.close()
-            await self.queue.put(Event('disconnected', None))
+            await self.queue.put(NetworkEvent('disconnected', None))
