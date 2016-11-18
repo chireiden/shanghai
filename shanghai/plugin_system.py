@@ -30,6 +30,7 @@ class Plugin:
 
 class PluginSystem:
 
+    # TODO: add configuration location
     PLUGIN_SEARCH_PATHS = [
         # ./plugins/
         os.path.join(os.getcwd(), 'plugins'),
