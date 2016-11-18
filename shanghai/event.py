@@ -80,9 +80,15 @@ class EventDispatcher:
         self.event_map = defaultdict(_PrioritizedSetList)
 
     def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
+        if not asyncio.iscoroutinefunction(coroutine):
+            raise ValueError("callable must be a coroutine function (defined with `async def`)")
+
         self.event_map[name].add(priority, coroutine)
 
     async def dispatch(self, name: str, *args):
+        if name not in self.event_map:
+            return
+
         for priority, handlers in self.event_map[name]:
             current_logger.ddebug("Starting tasks for event '{}' with priority {}"
                                   .format(name, priority))
@@ -115,9 +121,10 @@ message_event_dispatcher = MessageEventDispatcher()
 
 # decorator
 def network_event(name, priority=Priority.DEFAULT):
+    if name not in NetworkEventName.__members__.values():
+        raise ValueError("Unknown network event name '{}'".format(name))
+
     def deco(coroutine):
-        if name not in NetworkEventName.__members__.values():
-            raise ValueError("Unknown network event name '{}'".format(name))
         network_event_dispatcher.register(name, coroutine, priority)
         return coroutine
 

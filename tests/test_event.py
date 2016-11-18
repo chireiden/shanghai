@@ -1,7 +1,9 @@
 
+import asyncio
 import unittest
+from unittest import mock
 
-from shanghai import event
+from shanghai import event, logging
 
 
 class TestPriority(unittest.TestCase):
@@ -96,3 +98,92 @@ class TestPrioritizedSetList(unittest.TestCase):
         with self.assertRaises(ValueError):
             prio_set_list.remove(obj)
 
+
+class TestEventDispatchers(unittest.TestCase):
+
+    def setUp(self):
+        config = {
+            'disable-logging': True,
+            'disable-logging-output': True,
+        }
+        self.log_context = logging.LogContext('test', 'test', config=config)
+        self.log_context.push()
+
+    def tearDown(self):
+        self.log_context.pop()
+
+    def test_register(self):
+        dispatcher = event.EventDispatcher()
+
+        async def coroutinefunc(*args):
+            return True
+
+        dispatcher.register("some_name", coroutinefunc)
+        assert coroutinefunc in dispatcher.event_map["some_name"]
+
+    def test_register_callable(self):
+        dispatcher = event.EventDispatcher()
+
+        with self.assertRaises(ValueError):
+            dispatcher.register("some_name", lambda: None)
+
+    def test_dispatch(self):
+        dispatcher = event.EventDispatcher()
+        name = "some_name"
+        args = list(range(10))
+
+        async def coroutinefunc(*local_args):
+            assert args == list(local_args)
+
+        dispatcher.register(name, coroutinefunc)
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(dispatcher.dispatch(name, *args))
+
+    # TODO more dispatch tests
+
+    @unittest.skip("TODO")
+    def test_network_dispatch(self):
+        pass
+
+    @unittest.skip("TODO")
+    def test_message_dispatch(self):
+        pass
+
+
+class TestDecorators(unittest.TestCase):
+
+    def test_network_event(self):
+        @event.network_event(event.NetworkEventName.CONNECTED)
+        async def on_connected(network, _):
+            pass
+
+        prio_set_list = event.network_event_dispatcher.event_map[event.NetworkEventName.CONNECTED]
+        assert on_connected in prio_set_list
+
+    def test_network_event_exists(self):
+        with self.assertRaises(ValueError):
+            @event.network_event(123)
+            async def x():
+                pass
+
+        with self.assertRaises(ValueError):
+            @event.network_event('name')
+            async def xx():
+                pass
+
+    @mock.patch("shanghai.event.message_event_dispatcher", autospec=True)
+    def test_message_event_mock(self, dispatcher):
+        @event.message_event('PRIVMSG')
+        async def on_connected(network, _):
+            pass
+
+        dispatcher.register.assert_called_with('PRIVMSG', on_connected, event.Priority.DEFAULT)
+
+    def test_message_event(self):
+        @event.message_event('PRIVMSG')
+        async def on_connected(network, _):
+            pass
+
+        prio_set_list = event.message_event_dispatcher.event_map['PRIVMSG']
+        assert on_connected in prio_set_list
