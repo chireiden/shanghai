@@ -10,6 +10,14 @@ NetworkEvent = namedtuple("NetworkEvent", "name value")
 NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional
 
 
+class NetworkEventName(str, enum.Enum):
+    CONNECTED = "connected"
+    DISCONNECTED = "disconnected"
+    CLOSE_REQUEST = "close_request"
+    MESSAGE = "message"
+    RAW_LINE = "raw_line"
+
+
 class Priority(int, enum.Enum):
     CORE = 0
     DEFAULT = -10
@@ -29,7 +37,7 @@ class _PrioritizedSetList:
         # TODO prevent duplicates
         for i, (prio, set_) in enumerate(self.list):
             if priority > prio:
-                self.list.insert(i, obj)  # TODO does this work while iterating?
+                self.list.insert(i, obj)
                 break
             elif priority == prio:
                 set_.add(obj)
@@ -92,11 +100,9 @@ message_event_dispatcher = MessageEventDispatcher()
 # decorator
 def network_event(name, priority=Priority.DEFAULT):
     def deco(coroutine):
+        if name not in NetworkEventName.__members__.values():
+            raise ValueError("Unknown network event name '{}'".format(name))
         network_event_dispatcher.register(name, coroutine, priority)
-        # @functools.wraps(coroutine)
-        # async def wrapper(*args, **kwargs):
-        #     return await coroutine(*args, **kwargs)
-        # return wrapper
         return coroutine
 
     return deco

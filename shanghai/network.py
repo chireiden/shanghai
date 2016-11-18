@@ -6,7 +6,8 @@ import re
 import time
 
 from .connection import Connection
-from .event import NetworkEvent, network_event_dispatcher, core_network_event, core_message_event
+from .event import (NetworkEvent, NetworkEventName, network_event_dispatcher,
+                    core_network_event, core_message_event)
 from .irc import Message, Options, ServerReply
 from .logging import LogContext, current_logger, with_log_context
 
@@ -187,14 +188,14 @@ class Network:
 
     async def request_close(self, quitmsg: str = None):
         # TODO use Queue.put_nowait?
-        close_event = NetworkEvent('close_request', quitmsg)
+        close_event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         await self.event_queue.put(close_event)
 
 
 # Core event handlers #############################################################################
 
 
-@core_network_event('raw_line')
+@core_network_event(NetworkEventName.RAW_LINE)
 async def on_raw_line(network, raw_line: bytes):
     try:
         line = raw_line.decode(network.encoding)
@@ -208,27 +209,27 @@ async def on_raw_line(network, raw_line: bytes):
 
     # TODO use message_event_dispatcher.dispatch directly?
     # await message_event_dispatcher.dispatch(network, msg)
-    msg_event = NetworkEvent('message', msg)
+    msg_event = NetworkEvent(NetworkEventName.MESSAGE, msg)
     await network.event_queue.put(msg_event)
 
 
-@core_network_event('connected')
+@core_network_event(NetworkEventName.CONNECTED)
 async def on_connected(network, _):
     current_logger.info("connected!")
 
 
-@core_network_event('disconnected')
+@core_network_event(NetworkEventName.DISCONNECTED)
 async def on_disconnected(network, _):
     current_logger.info('connection closed by peer!')
 
 
-@core_network_event('close_request')
+@core_network_event(NetworkEventName.CLOSE_REQUEST)
 async def on_close_request(network, quitmsg):
     current_logger.info('closing connection')
     network._close(quitmsg)
 
 
-@core_network_event('message')
+@core_network_event(NetworkEventName.MESSAGE)
 async def on_message(network, _):
     network.unset_ping_timeout_handlers()
     network.set_ping_timeout_handlers()
