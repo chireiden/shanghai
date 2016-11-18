@@ -22,7 +22,7 @@ class Network:
 
         self.event_queue = None
 
-        self._current_server_index = -1
+        self._server_iter = itertools.cycle(self.config['servers'])
         self._connection = None
         self._worker_task_failure_timestamps = []
         self._ping_timeout_handle = None
@@ -44,16 +44,9 @@ class Network:
 
         self.unset_ping_timeout_handlers()
 
-        server = self._next_server()
+        server = next(self._server_iter)
         self.event_queue = asyncio.Queue()
         self._connection = Connection(server.host, server.port, self.event_queue, server.ssl)
-
-    def _next_server(self):
-        servers = self.config['servers']
-        self._current_server_index = (self._current_server_index + 1) % len(servers)
-        server = servers[self._current_server_index]
-        current_logger.info('Using server', server)
-        return server
 
     def _make_log_context(self, *args, **kwargs):
         return LogContext('network', self.name, self.config)
