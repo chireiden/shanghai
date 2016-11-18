@@ -85,7 +85,8 @@ class Message:
             try:
                 command = ServerReply(command)
             except ValueError:
-                current_logger.warning("unknown server reply code", command)
+                current_logger.warning("unknown server reply code {}; {}"
+                                       .format(command, raw_line))
 
         params = []
         if line:

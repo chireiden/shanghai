@@ -17,6 +17,18 @@ from .local import LocalStack, LocalProxy
 _LOGGING_CONFIG = {}  # type: t.Dict[str, t.Any]
 
 
+class LogLevels(int, Enum):
+    CRITICAL = logging.CRITICAL
+    ERROR = logging.ERROR
+    WARNING = logging.WARNING
+    INFO = logging.INFO
+    DEBUG = logging.DEBUG
+    DDEBUG = 5
+    NOTSET = logging.NOTSET
+
+logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
+
+
 def set_logging_config(config):
     global _LOGGING_CONFIG
     _LOGGING_CONFIG = config
@@ -34,12 +46,18 @@ def _print_like(func):
 class Logger(logging.Logger):
     """Wrap _print_link around so we can use logger.info etc. similar to the
     print function. e.g. logging.info('foo', 'bar', 'baz')"""
-    info = _print_like(logging.Logger.info)
     debug = _print_like(logging.Logger.debug)
+    info = _print_like(logging.Logger.info)
     warn = _print_like(logging.Logger.warn)
     warning = _print_like(logging.Logger.warning)
     error = _print_like(logging.Logger.error)
     exception = _print_like(logging.Logger.exception)
+    critical = _print_like(logging.Logger.critical)
+
+    def ddebug(self, *args, **kwargs):
+        f = io.StringIO()
+        print(*args, file=f)
+        self.log(LogLevels.DDEBUG, f.getvalue().strip(), **kwargs)
 
 
 class FileHandler(logging.FileHandler):
@@ -61,10 +79,9 @@ class TerminalColor(str, Enum):
 
     @classmethod
     def for_level(cls, level):
-        names = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
-        for name in names:
-            if level >= getattr(logging, name):
-                return getattr(cls, name)
+        for log_level in sorted(LogLevels, reverse=True):
+            if level >= log_level.value:
+                return getattr(cls, log_level.name, "")
         return ""
 
 
@@ -180,7 +197,7 @@ class LogContext:
         disable_logging = config.get('disable-logging', False)
         disable_logging_output = config.get('disable-logging-output', False)
         level = config.get('logging', {}).get('level', 'INFO')
-        logger.setLevel(level)
+        logger.setLevel(LogLevels[level])
 
         if not disable_logging:
             file_formatter = Formatter(context, name, tz=timezone)
