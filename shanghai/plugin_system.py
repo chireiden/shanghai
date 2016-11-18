@@ -141,7 +141,3 @@ class PluginSystem:
                 ', '.join('__plugin_{}__'.format(i) for i in required_ids), filename))
 
         return info
-
-    @classmethod
-    def dispatch_to_plugins(cls, event, *args, **kwargs):
-        pass
