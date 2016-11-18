@@ -1,6 +1,6 @@
 
 from shanghai.irc.message import Message
-from shanghai.event import EventDispatcher, message_event, message_event_dispatcher
+from shanghai.event import message_event, message_event_dispatcher
 
 __plugin_name__ = 'CTCP Plugin'
 __plugin_version__ = '0.0.1'
@@ -50,7 +50,7 @@ async def privmsg(network, msg: Message):
 
 
 @message_event('NOTICE')
-async def privmsg(network, msg: Message):
+async def notice(network, msg: Message):
     if not msg.params or len(msg.params) < 2:
         return
     result = parse_ctcp(msg.params[1])
