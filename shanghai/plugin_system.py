@@ -9,12 +9,12 @@ from .logging import current_logger
 
 class Plugin:
 
-    def __init__(self, info, module_or_package):
+    def __init__(self, info, module):
         self.info = info
-        self.module_or_package = module_or_package
+        self.module = module
 
     def initialize(self):
-        func_ref = getattr(self.module_or_package, 'initialize', None)
+        func_ref = getattr(self.module, 'initialize', None)
         if func_ref is None:
             current_logger.debug('No Initialization for plugin', self)
             return
@@ -51,7 +51,6 @@ class PluginSystem:
         if identifier in cls.plugin_registry:
             current_logger.warn('Plugin', identifier, 'already exists.')
             return cls.plugin_registry[identifier]
-        plugin = None
         for search_path in cls.PLUGIN_SEARCH_PATHS:
             try:
                 plugin = cls.load_from_path(search_path, identifier)
@@ -59,7 +58,7 @@ class PluginSystem:
                 pass
             else:
                 break
-        if plugin is None:
+        else:  # I always wanted to use this at least once
             raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
                                     .format(identifier, '\n'.join(cls.PLUGIN_SEARCH_PATHS)))
 
@@ -71,35 +70,26 @@ class PluginSystem:
     @classmethod
     def load_from_path(cls, search_path, identifier):
         path = os.path.join(search_path, identifier)
-        package_path = os.path.join(path, '__init__.py')
         module_path = path + '.py'
-        if not os.path.exists(package_path) \
-                and not os.path.exists(module_path):
-            raise FileNotFoundError('No such file {!r} or {!r}'
-                                    .format(package_path, module_path))
-        if os.path.isfile(package_path):
-            return cls._load_plugin_as_module_or_package(package_path, identifier, package=True)
+        if not os.path.exists(module_path):
+            raise FileNotFoundError('No such file {!r}'.format(module_path))
         if os.path.isfile(module_path):
-            return cls._load_plugin_as_module_or_package(module_path, identifier)
+            return cls._load_plugin_as_module(module_path, identifier)
         raise OSError('Error trying to load {!r}'.format(path))
 
     @classmethod
-    def _load_plugin_as_module_or_package(cls, path, identifier, package=False):
+    def _load_plugin_as_module(cls, path, identifier):
         # TODO: load dependencies first!
         info = cls._get_plugin_info(path, identifier)
         # info['depends'] and info['conflicts']
 
-        if package:
-            spec = importlib.util.spec_from_file_location(
-                identifier, path, submodule_search_locations=[])
-        else:
-            spec = importlib.util.spec_from_file_location(identifier, path)
+        spec = importlib.util.spec_from_file_location(identifier, path)
 
-        module_or_package = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module_or_package)
-        current_logger.info('Found plugin in', module_or_package.__file__)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        current_logger.info('Found plugin in', module.__file__)
 
-        plugin = cls.plugin_factory(info, module_or_package)
+        plugin = cls.plugin_factory(info, module)
         current_logger.info(plugin)
         return plugin
 
@@ -116,9 +106,8 @@ class PluginSystem:
             ('depends', []),
             ('conflicts', []),
         ])
-        # is it reasonable to simply use __name__ and __version__ etc.?
-        target_ids = ['__plugin_{}__'.format(_id) for _id in info]
         required_ids = {'name', 'version', 'description'}
+        ignore_ids = {'identifier'}
 
         for statement in tree.body:
             if not isinstance(statement, ast.Assign):
@@ -130,10 +119,16 @@ class PluginSystem:
                 continue
             if not isinstance(statement.value, ast.Str):
                 continue
-            if target.id not in target_ids:
+            if not target.id.startswith('__plugin_') or not target.id.endswith('__'):
                 continue
-            _id = target.id[9:-2]
-            required_ids.remove(_id)  # might throw error if __name__ etc. occures twice
+
+            _id = target.id.strip('_')[7:]
+            if _id in ignore_ids:
+                continue
+            if _id not in info:
+                continue
+
+            required_ids.remove(_id)  # might throw error if __plugin_name__ etc. occures twice
             info[_id] = statement.value.s
 
         if required_ids:
