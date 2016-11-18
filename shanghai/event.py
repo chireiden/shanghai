@@ -141,9 +141,3 @@ def message_event(name, priority=Priority.DEFAULT):
 
 core_network_event = functools.partial(network_event, priority=Priority.CORE)
 core_message_event = functools.partial(message_event, priority=Priority.CORE)
-
-
-@core_network_event('message')
-async def message_event_worker(network, msg):
-    await message_event_dispatcher.dispatch(network, msg)
-    # TODO interpret results?

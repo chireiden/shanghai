@@ -6,7 +6,8 @@ import re
 import time
 
 from .connection import Connection
-from .event import (NetworkEvent, NetworkEventName, network_event_dispatcher,
+from .event import (NetworkEvent, NetworkEventName,
+                    network_event_dispatcher, message_event_dispatcher,
                     core_network_event, core_message_event)
 from .irc import Message, Options, ServerReply
 from .logging import LogContext, current_logger, with_log_context
@@ -208,9 +209,7 @@ async def on_raw_line(network, raw_line: bytes):
         raise exc
 
     # TODO use message_event_dispatcher.dispatch directly?
-    # await message_event_dispatcher.dispatch(network, msg)
-    msg_event = NetworkEvent(NetworkEventName.MESSAGE, msg)
-    await network.event_queue.put(msg_event)
+    await message_event_dispatcher.dispatch(network, msg)
 
 
 @core_network_event(NetworkEventName.CONNECTED)
