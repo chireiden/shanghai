@@ -37,19 +37,27 @@ class _PrioritizedSetList:
         if obj in self:
             raise ValueError("Object {!r} has already been added".format(obj))
 
+        i = -1
         for i, (prio, set_) in enumerate(self.list):
             if priority > prio:
-                self.list.insert(i, obj)
                 break
             elif priority == prio:
                 set_.add(obj)
-                break
+                return
         else:
-            self.list.append((priority, {obj}))
+            i = i + 1  # 0 if empty; len(self.list) if priority < all others
+
+        self.list.insert(i, (priority, {obj}))
 
     def remove(self, obj):
-        # TODO remove set entirely if empty
-        raise NotImplementedError()
+        for i, (prio, set_) in enumerate(self.list):
+            if obj in set_:
+                set_.remove(obj)
+                if not set_:
+                    del self.list[i]
+                return
+        else:
+            raise ValueError("Object {!r} can not be found".format(obj))
 
     def __iter__(self):
         return iter(self.list)
