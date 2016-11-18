@@ -6,27 +6,9 @@ import re
 import time
 
 from .connection import Connection
-from .event import NetworkEvent
+from .event import NetworkEvent, network_event_dispatcher, core_network_event, core_message_event
 from .irc import Message, Options, ServerReply
 from .logging import LogContext, current_logger, with_log_context
-
-
-class Context:
-    """Sample Context class
-
-    Provide some environment for each event (e.g. network)."""
-    # TODO: Move this class into its own file later
-
-    def __init__(self,
-                 event: NetworkEvent,
-                 network: 'Network'):
-        self.event = event
-        self.network = network
-
-    def __getattr__(self, name):
-        # TODO determine these from generators
-        if name in ('send_line', 'send_cmd', 'request_close'):
-            return getattr(self.network, name)
 
 
 class Network:
@@ -174,13 +156,13 @@ class Network:
         else:
             assert event.name == "connected"
             assert self.connection == event.value
-            current_logger.info("connected!")
+            await network_event_dispatcher.dispatch(self, event)
 
         # start register process
         self.start_register()
 
     async def worker(self, restarted=False):
-        """Sample worker."""
+        """Dispatches event from the event Queue."""
 
         if not restarted:
             await self.init_worker()
@@ -188,69 +170,7 @@ class Network:
         while not self.stopped:
             event = await self.queue.get()
             current_logger.debug(event)
-
-            # remember to forward these event to plugins
-            if event.name == 'raw_line':
-                try:
-                    line = event.value.decode(self.encoding)
-                except UnicodeDecodeError:
-                    line = event.value.decode(self.fallback_encoding, 'replace')
-                try:
-                    message = Message.from_line(line)
-                except Exception as exc:
-                    current_logger.exception('-->', line)
-                    raise exc
-                if message.command == 'PING':
-                    self.send_cmd('PONG', *message.params)
-                event = NetworkEvent('message', message)
-                await self.queue.put(event)
-
-            elif event.name == 'disconnected':
-                current_logger.info('connection closed by peer!')
-
-            elif event.name == 'close_request':
-                current_logger.info('closing connection')
-                self._close(event.value)
-
-            # create context
-            # context = Context(event, self)
-            elif event.name == 'message':
-                self.unset_ping_timeout_handlers()
-                self.set_ping_timeout_handlers()
-
-                message = event.value
-                if message.command == 'PRIVMSG':
-                    if message.params[-1].startswith('!except'):
-                        raise Exception('Test Exception')
-                    if message.params[-1].startswith('!quit'):
-                        await self.request_close(message.params[-1])
-
-                if message.command == ServerReply.RPL_WELCOME:
-                    self.nickname = message.params[0]
-                    self.send_cmd('MODE', self.nickname, '+B')
-
-                    # join test channel
-                    for channel, chanconf in self.config['channels'].items():
-                        key = chanconf.get('key', None)
-                        if key is not None:
-                            self.send_cmd('JOIN', channel, key)
-                        else:
-                            self.send_cmd('JOIN', channel)
-
-                elif message.command == ServerReply.RPL_ISUPPORT:
-                    self.options.extend_from_message(message)
-
-                elif message.command == ServerReply.ERR_NICKNAMEINUSE:
-                    # TODO move this handler somewhere else
-                    def inc_suffix(m):
-                        num = m.group(1) or 0
-                        return str(int(num) + 1)
-                    self.nickname = re.sub(r"(\d*)$", inc_suffix,
-                                           self.nickname)
-                    self.send_cmd('NICK', self.nickname)
-
-            # TODO: dispatch event to handlers, e.g. plugins.
-            # TODO: pass the context along
+            await network_event_dispatcher.dispatch(self, event)
 
         current_logger.debug('exiting worker task')
 
@@ -273,5 +193,93 @@ class Network:
         self.stopped = True
 
     async def request_close(self, quitmsg: str = None):
+        # TODO use Queue.put_nowait?
         close_event = NetworkEvent('close_request', quitmsg)
         await self.queue.put(close_event)
+
+
+# Core event handlers #############################################################################
+
+
+@core_network_event('raw_line')
+async def on_raw_line(network, raw_line: bytes):
+    try:
+        line = raw_line.decode(network.encoding)
+    except UnicodeDecodeError:
+        line = raw_line.decode(network.fallback_encoding, 'replace')
+    try:
+        msg = Message.from_line(line)
+    except Exception as exc:
+        current_logger.exception('-->', line)
+        raise exc
+
+    # TODO use message_event_dispatcher.dispatch directly?
+    # await message_event_dispatcher.dispatch(network, msg)
+    msg_event = NetworkEvent('message', msg)
+    await network.queue.put(msg_event)
+
+
+@core_network_event('connected')
+async def on_connected(network, _):
+    current_logger.info("connected!")
+
+
+@core_network_event('disconnected')
+async def on_disconnected(network, _):
+    current_logger.info('connection closed by peer!')
+
+
+@core_network_event('close_request')
+async def on_close_request(network, quitmsg):
+    current_logger.info('closing connection')
+    network._close(quitmsg)
+
+
+@core_network_event('message')
+async def on_message(network, _):
+    network.unset_ping_timeout_handlers()
+    network.set_ping_timeout_handlers()
+
+
+@core_message_event('PING')
+async def on_ping(network, message):
+    if message.command == 'PING':
+        network.send_cmd('PONG', *message.params)
+
+
+@core_message_event('PRIVMSG')
+async def on_privmsg(network, message):
+    line = message.params[-1]
+    if line.startswith('!except'):
+        raise Exception('Test Exception')
+    elif line.startswith('!quit'):
+        await network.request_close(line)
+
+
+@core_message_event(ServerReply.RPL_WELCOME)
+async def on_msg_welcome(network, message):
+    if message.command == ServerReply.RPL_WELCOME:
+        network.nickname = message.params[0]
+        network.send_cmd('MODE', network.nickname, '+B')
+
+        # join test channel
+        for channel, chanconf in network.config['channels'].items():
+            key = chanconf.get('key', None)
+            if key is not None:
+                network.send_cmd('JOIN', channel, key)
+            else:
+                network.send_cmd('JOIN', channel)
+
+
+@core_message_event(ServerReply.RPL_ISUPPORT)
+async def on_msg_isupport(network, message):
+    network.options.extend_from_message(message)
+
+
+@core_message_event(ServerReply.ERR_NICKNAMEINUSE)
+async def on_msg_nickinuse(network, _):
+    def inc_suffix(m):
+        num = m.group(1) or 0
+        return str(int(num) + 1)
+    network.nickname = re.sub(r"(\d*)$", inc_suffix, network.nickname)
+    network.send_cmd('NICK', network.nickname)
