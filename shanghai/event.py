@@ -34,7 +34,9 @@ class _PrioritizedSetList:
         self.list = list()
 
     def add(self, priority: int, obj):
-        # TODO prevent duplicates
+        if obj in self:
+            raise ValueError("Object {!r} has already been added".format(obj))
+
         for i, (prio, set_) in enumerate(self.list):
             if priority > prio:
                 self.list.insert(i, obj)
@@ -51,6 +53,12 @@ class _PrioritizedSetList:
 
     def __iter__(self):
         return iter(self.list)
+
+    def __contains__(self, obj):
+        return any(obj in set_ for _, set_ in self)
+
+    def __bool__(self):
+        return bool(self.list)
 
     # def sort(self):
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
