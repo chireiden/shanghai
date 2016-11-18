@@ -1,7 +1,6 @@
 
 import ast
-import asyncio
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 import importlib.util
 import os
 
@@ -14,15 +13,6 @@ class Plugin:
         self.info = info
         self.module_or_package = module_or_package
 
-        self.registered_events = defaultdict(list)
-
-    def register_event(self, event, func_ref, data=None, priority=-10):
-        current_logger.debug(
-            'Registering event', repr(event), 'to', self,
-            'with data', repr(data), 'and priority', priority)
-        # TODO: Implement.
-        raise NotImplementedError
-
     def initialize(self):
         func_ref = getattr(self.module_or_package, 'initialize', None)
         if func_ref is None:
@@ -33,31 +23,6 @@ class Plugin:
                                 .format(self.info['identifier']))
         current_logger.debug('Initialize plugin', self)
         func_ref(self)
-
-    def _get_event_funcs(self, event):
-        if event in self.registered_events:
-            for func_ref in self.registered_events[event]:
-                if not callable(func_ref):
-                    current_logger.error('Registered function for event {} in plugin {} is not'
-                                         ' callable'.format(event, self.info['identifier']))
-                    continue
-                yield func_ref
-
-    async def dispatch(self, event, *args, **kwargs):
-        results = []
-        for func_ref in self._get_event_funcs(event):
-            if asyncio.iscoroutinefunction(func_ref):
-                results.append(await func_ref(self, *args, **kwargs))
-            else:
-                results.append(func_ref(self, *args, **kwargs))
-        return results
-
-    def sync_dispatch(self, event, *args, **kwargs):
-        """Will this even be necessary? Should we enforce the async always?"""
-        results = []
-        for func_ref in self._get_event_funcs(event):
-            results.append(func_ref(self, *args, **kwargs))
-        return results
 
     def __repr__(self):
         return '<Plugin {identifier}: {name} v{version} - {description}>'.format(**self.info)
