@@ -6,15 +6,11 @@ import hashlib
 import io
 import logging
 import os
-import typing as t
 
 import colorama
 import pytz
 
-from .local import LocalStack, LocalProxy
-
-
-_LOGGING_CONFIG = {}  # type: t.Dict[str, t.Any]
+_LOGGING_CONFIG = {}
 _default_logger = None
 
 

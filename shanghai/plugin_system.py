@@ -104,7 +104,8 @@ class PluginSystem:
             cls.load_plugin(dependency, dependency_path=dependency_path + [identifier])
 
         if dependency_path:
-            get_default_logger().info('Loading plugin', identifier, 'as dependency of', dependency_path)
+            get_default_logger().info('Loading plugin', identifier,
+                                      'as dependency of', dependency_path)
         else:
             get_default_logger().info('Loading plugin', identifier)
         spec = importlib.util.spec_from_file_location(identifier, str(path))

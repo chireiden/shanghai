@@ -1,7 +1,7 @@
 
 from unittest import TestCase
 from shanghai.irc import Prefix, Message, ServerReply
-from shanghai.logging import LogContext, set_logging_config
+from shanghai.logging import get_logger, set_logging_config, set_default_logger
 
 
 class TestPrefix(TestCase):
@@ -40,11 +40,8 @@ class TestMessage(TestCase):
             'disable-logging': True,
             'disable-logging-output': True,
         })
-        self.log_context = LogContext('test', 'test')
-        self.log_context.push()
-
-    def tearDown(self):
-        self.log_context.pop()
+        self.logger = get_logger('test', 'test')
+        set_default_logger(self.logger)
 
     def test_privmsg(self):
         m = Message.from_line(':nick!user@host PRIVMSG #channel :Some message')
