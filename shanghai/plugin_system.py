@@ -37,7 +37,7 @@ class Plugin:
 class PluginSystem:
     if sys.platform == 'win32':
         # %APPDATA%/shanghai/plugins
-        _home_config_path = os.path.expandvars(pathlib.Path(r"%APPDATA%\shanghai\plugins"))
+        _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai\plugins"))
     else:
         # ~/.config/shanghai/plugins
         _home_config_path = pathlib.Path("~/.config/shanghai/plugins").expanduser()
@@ -105,7 +105,7 @@ class PluginSystem:
             current_logger.info('Loading plugin', identifier, 'as dependency of', dependency_path)
         else:
             current_logger.info('Loading plugin', identifier)
-        spec = importlib.util.spec_from_file_location(identifier, path)
+        spec = importlib.util.spec_from_file_location(identifier, str(path))
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -116,9 +116,9 @@ class PluginSystem:
         return plugin
 
     @staticmethod
-    def _get_plugin_info(filename: pathlib.Path, identifier):
-        with filename.open('r', encoding='utf-8') as f:
-            tree = ast.parse(f.read(), filename)
+    def _get_plugin_info(path: pathlib.Path, identifier):
+        with path.open('r', encoding='utf-8') as f:
+            tree = ast.parse(f.read(), str(path))
 
         info = OrderedDict([
             ('identifier', identifier),
@@ -172,6 +172,6 @@ class PluginSystem:
         if required_ids:
             # TODO: Use better exception.
             raise RuntimeError('Missing {} in {}'.format(
-                ', '.join('__plugin_{}__'.format(i) for i in required_ids), str(filename)))
+                ', '.join('__plugin_{}__'.format(i) for i in required_ids), str(path)))
 
         return info
