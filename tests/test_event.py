@@ -179,11 +179,15 @@ class TestDecorators(unittest.TestCase):
 
     @mock.patch("shanghai.event.message_event_dispatcher", autospec=True)
     def test_message_event_mock(self, dispatcher):
+
         @event.message_event('PRIVMSG')
         async def on_connected(network, _):
             pass
 
         dispatcher.register.assert_called_with('PRIVMSG', on_connected, event.Priority.DEFAULT)
+
+        on_connected.unregister()
+        dispatcher.unregister.assert_called_with('PRIVMSG', on_connected)
 
     def test_message_event(self):
         @event.message_event('PRIVMSG')

@@ -1,4 +1,6 @@
 
+import functools
+
 from shanghai.event import Priority, MessageEventDispatcher, core_message_event
 from shanghai.irc import Message
 from shanghai.network import Network
@@ -58,8 +60,11 @@ ctcp_event_dispatcher = MessageEventDispatcher()
 
 # decorator
 def ctcp_event(name, priority=Priority.DEFAULT):
+    dispatcher = ctcp_event_dispatcher
+
     def deco(coroutine):
-        ctcp_event_dispatcher.register(name, coroutine, priority)
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
         return coroutine
 
     return deco

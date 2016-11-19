@@ -79,6 +79,9 @@ class EventDispatcher:
     def __init__(self):
         self.event_map = defaultdict(_PrioritizedSetList)
 
+    def unregister(self, name: str, coroutine):
+        self.event_map[name].remove(coroutine)
+
     def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
         if not asyncio.iscoroutinefunction(coroutine):
             raise ValueError("callable must be a coroutine function (defined with `async def`)")
@@ -124,8 +127,11 @@ def network_event(name, priority=Priority.DEFAULT):
     if name not in NetworkEventName.__members__.values():
         raise ValueError("Unknown network event name '{}'".format(name))
 
+    dispatcher = network_event_dispatcher
+
     def deco(coroutine):
-        network_event_dispatcher.register(name, coroutine, priority)
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
         return coroutine
 
     return deco
@@ -133,8 +139,11 @@ def network_event(name, priority=Priority.DEFAULT):
 
 # decorator
 def message_event(name, priority=Priority.DEFAULT):
+    dispatcher = message_event_dispatcher
+
     def deco(coroutine):
-        message_event_dispatcher.register(name, coroutine, priority)
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
         return coroutine
 
     return deco
