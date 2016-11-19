@@ -48,8 +48,8 @@ def send_ctcp_reply(network, target: str, command: str, text: str = None):
 
 
 # add these to the network class
-Network.add_method('send_ctcp', send_ctcp)
-Network.add_method('send_ctcp_reply', send_ctcp_reply)
+Network.add_cls_method('send_ctcp', send_ctcp)
+Network.add_cls_method('send_ctcp_reply', send_ctcp_reply)
 
 
 # provide an event dispatcher for CTCP events
