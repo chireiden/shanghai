@@ -15,6 +15,7 @@ class Shanghai:
         # but this is just for testing for now.
         self.plugin_system = PluginSystem()
         self.plugin_system.load_plugin('ctcp')
+        self.plugin_system.load_plugin('test')
 
     def init_networks(self):
         for netconf in self.config.networks:

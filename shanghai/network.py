@@ -240,15 +240,6 @@ async def on_ping(network, message):
         network.send_cmd('PONG', *message.params)
 
 
-@core_message_event('PRIVMSG')
-async def on_privmsg(network, message):
-    line = message.params[-1]
-    if line.startswith('!except'):
-        raise Exception('Test Exception')
-    elif line.startswith('!quit'):
-        await network.request_close(line)
-
-
 @core_message_event(ServerReply.RPL_WELCOME)
 async def on_msg_welcome(network, message):
     if message.command == ServerReply.RPL_WELCOME:
