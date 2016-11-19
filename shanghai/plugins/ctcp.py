@@ -1,10 +1,11 @@
 
 from shanghai.event import Priority, MessageEventDispatcher, core_message_event
-from shanghai.irc.message import Message
+from shanghai.irc import Message
+from shanghai.network import Network
 
-__plugin_name__ = 'CTCP Plugin'
-__plugin_version__ = '0.0.1'
-__plugin_description__ = 'CTCP Message processing.'
+__plugin_name__ = 'CTCP'
+__plugin_version__ = '0.0.2'
+__plugin_description__ = 'CTCP Message processing'
 
 
 class CtcpMessage(Message):
@@ -12,31 +13,43 @@ class CtcpMessage(Message):
     def __repr__(self):
         return '<CTCP command={!r} params={!r}>'.format(self.command, self.params)
 
+    @classmethod
+    def from_message(cls, msg: Message):
+        """Very primitive but should do the job for now."""
+        if not msg.command == 'PRIVMSG':
+            return None
+        line = msg.params[1]
+        if not line.startswith('\x01') or not line.endswith('\x01'):
+            return None
+        line = line[1:-1].rstrip()
+        if not line:
+            return None
+        ctcp_cmd, *ctcp_params = line.split(' ', 1)
+        if not ctcp_cmd:
+            return None
+        ctcp_cmd = ctcp_cmd.upper()
+        if ctcp_params:
+            ctcp_params = ctcp_params[0].split()
+        return cls(ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
 
-def build_ctcp(target, command, params):
-    args = [command, *params]
-    return 'PRIVMSG', target, '\x01{}\x01'.format(' '.join(args))
+
+def send_ctcp(network, target: str, command: str, text: str = None):
+    if text:
+        text = ' ' + text
+    text = '\x01{}{}\x01'.format(command, text)
+    return network.send_msg(target, text)
 
 
-def build_ctcp_reply(target, command, params):
-    args = [command, *params]
-    return 'NOTICE', target, '\x01{}\x01'.format(' '.join(args))
+def send_ctcp_reply(network, target: str, command: str, text: str = None):
+    if text:
+        text = ' ' + text
+    text = '\x01{}{}\x01'.format(command, text)
+    return network.send_notice(target, text)
 
 
-def parse_ctcp(line):
-    """Very primitive but should do the job for now."""
-    if not line.startswith('\x01') or not line.endswith('\x01'):
-        return
-    line = line[1:-1].rstrip()
-    if not line:
-        return
-    ctcp_cmd, *ctcp_params = line.split(' ', 1)
-    if not ctcp_cmd:
-        return
-    ctcp_cmd = ctcp_cmd.upper()
-    if ctcp_params:
-        ctcp_params = ctcp_params[0].split()
-    return ctcp_cmd, ctcp_params
+# add these to the network class
+Network.add_method('send_ctcp', send_ctcp)
+Network.add_method('send_ctcp_reply', send_ctcp_reply)
 
 
 @message_event('NOTICE')
@@ -73,4 +86,5 @@ async def privmsg(network, msg: Message):
 # example ctcp_event hook
 @ctcp_event('VERSION')
 async def version_request(network, msg: CtcpMessage):
-    network.send_cmd(*build_ctcp_reply(msg.prefix[0], 'VERSION', ['Shanghai v37']))
+    source = msg.prefix[0]
+    network.send_ctcp_reply(source, 'VERSION', 'Shanghai v37')
