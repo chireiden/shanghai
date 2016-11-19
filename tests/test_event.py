@@ -129,16 +129,21 @@ class TestEventDispatchers(unittest.TestCase):
 
     def test_dispatch(self):
         dispatcher = event.EventDispatcher()
+        loop = asyncio.get_event_loop()
         name = "some_name"
         args = list(range(10))
+        called = 0
 
         async def coroutinefunc(*local_args):
+            nonlocal called
             assert args == list(local_args)
+            called += 1
 
         dispatcher.register(name, coroutinefunc)
-
-        loop = asyncio.get_event_loop()
         loop.run_until_complete(dispatcher.dispatch(name, *args))
+        loop.run_until_complete(dispatcher.dispatch(name + '_', *args))
+
+        assert called == 1
 
     # TODO more dispatch tests
 
