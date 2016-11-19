@@ -15,6 +15,7 @@ from .logging import current_logger, LogContext, set_logging_config, LogLevels
 def exception_handler(loop, context):  # pylint: disable=unused-argument
     f = io.StringIO()
     print("Unhandled Exception", file=f)
+    print("Message: ", context['message'], file=f)
     print("-- Context --", file=f)
     pprint(context, stream=f)
 
