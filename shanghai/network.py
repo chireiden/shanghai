@@ -178,6 +178,14 @@ class Network:
             args[-1] = ':{}'.format(args[-1])
         self.send_line(' '.join(args))
 
+    def send_msg(self, target, text):
+        # TODO split messages that are too long into multiple, also newlines
+        self.send_cmd('PRIVMSG', target, text)
+
+    def send_notice(self, target, text):
+        # TODO split messages that are too long into multiple, also newlines
+        self.send_cmd('NOTICE', target, text)
+
     def _close(self, quitmsg: str = None):
         current_logger.info("closing network")
         if quitmsg:
