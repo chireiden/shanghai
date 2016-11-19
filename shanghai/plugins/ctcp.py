@@ -52,17 +52,6 @@ Network.add_method('send_ctcp', send_ctcp)
 Network.add_method('send_ctcp_reply', send_ctcp_reply)
 
 
-@message_event('NOTICE')
-async def notice(network, msg: Message):
-    if not msg.params or len(msg.params) < 2:
-        return
-    result = parse_ctcp(msg.params[1])
-    if result is None:
-        return
-    ctcp_cmd, ctcp_params = result
-    new_msg = CtcpMessage('CTCP_REPLY_' + ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
-    await message_event_dispatcher.dispatch(network, new_msg)
-
 # provide an event dispatcher for CTCP events
 ctcp_event_dispatcher = MessageEventDispatcher()
 
