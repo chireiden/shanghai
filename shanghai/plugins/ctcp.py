@@ -1,6 +1,6 @@
 
+from shanghai.event import Priority, MessageEventDispatcher, core_message_event
 from shanghai.irc.message import Message
-from shanghai.event import message_event, message_event_dispatcher
 
 __plugin_name__ = 'CTCP Plugin'
 __plugin_version__ = '0.0.1'
@@ -39,16 +39,6 @@ def parse_ctcp(line):
     return ctcp_cmd, ctcp_params
 
 
-@message_event('PRIVMSG')
-async def privmsg(network, msg: Message):
-    result = parse_ctcp(msg.params[1])
-    if result is None:
-        return
-    ctcp_cmd, ctcp_params = result
-    new_msg = CtcpMessage('CTCP_' + ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
-    await message_event_dispatcher.dispatch(network, new_msg)
-
-
 @message_event('NOTICE')
 async def notice(network, msg: Message):
     if not msg.params or len(msg.params) < 2:
@@ -60,7 +50,27 @@ async def notice(network, msg: Message):
     new_msg = CtcpMessage('CTCP_REPLY_' + ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
     await message_event_dispatcher.dispatch(network, new_msg)
 
+# provide an event dispatcher for CTCP events
+ctcp_event_dispatcher = MessageEventDispatcher()
 
-@message_event('CTCP_VERSION')
+
+# decorator
+def ctcp_event(name, priority=Priority.DEFAULT):
+    def deco(coroutine):
+        ctcp_event_dispatcher.register(name, coroutine, priority)
+        return coroutine
+
+    return deco
+
+
+@core_message_event('PRIVMSG')
+async def privmsg(network, msg: Message):
+    ctcp_msg = CtcpMessage.from_message(msg)
+    if ctcp_msg:
+        await ctcp_event_dispatcher.dispatch(network, ctcp_msg)
+
+
+# example ctcp_event hook
+@ctcp_event('VERSION')
 async def version_request(network, msg: CtcpMessage):
     network.send_cmd(*build_ctcp_reply(msg.prefix[0], 'VERSION', ['Shanghai v37']))
