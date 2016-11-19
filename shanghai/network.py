@@ -71,7 +71,8 @@ class Network(ShadowAttributesMixin):
             except:
                 current_logger.exception("Connection Task errored")
 
-            assert self._worker_task.done()
+            # Wait until worker task emptied the queue (and terminates)
+            await self._worker_task
             if self.stopped:
                 return
 
@@ -141,7 +142,7 @@ class Network(ShadowAttributesMixin):
         self._ping_timeout_handle = loop.call_later(5 * 60, self.ping_timeout)
         self._send_ping_handle = loop.call_later(4 * 60, self.send_ping)
 
-    async def init_worker(self):
+    async def _init_worker(self):
         # First item on queue should be "connected", with the connection
         # as its value
         event = await self.event_queue.get()
@@ -154,8 +155,8 @@ class Network(ShadowAttributesMixin):
             self.stopped = True
             return
         else:
-            assert event.name == "connected"
-            assert self._connection == event.value
+            assert event.name == "connected", event
+            assert self._connection == event.value, (event, self._connection)
             await network_event_dispatcher.dispatch(self, event)
 
         # start register process
@@ -165,9 +166,9 @@ class Network(ShadowAttributesMixin):
         """Dispatches events from the event queue."""
 
         if not restarted:
-            await self.init_worker()
+            await self._init_worker()
 
-        while not self.stopped:
+        while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
             current_logger.debug(event)
             await network_event_dispatcher.dispatch(self, event)
