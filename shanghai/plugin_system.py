@@ -2,6 +2,7 @@
 import ast
 from collections import OrderedDict
 import importlib.util
+import pathlib
 import os
 import sys
 
@@ -36,26 +37,26 @@ class Plugin:
 class PluginSystem:
     if sys.platform == 'win32':
         # %APPDATA%/shanghai/plugins
-        _home_config_path = os.path.expandvars(R"%APPDATA%\shanghai\plugins")
+        _home_config_path = os.path.expandvars(pathlib.Path(r"%APPDATA%\shanghai\plugins"))
     else:
         # ~/.config/shanghai/plugins
-        _home_config_path = os.path.expanduser("~/.config/shanghai/plugins")
+        _home_config_path = pathlib.Path("~/.config/shanghai/plugins").expanduser()
 
     # TODO: add configuration location
     PLUGIN_SEARCH_PATHS = [
         # ./plugins/
         # TODO might be redundant
-        os.path.join(os.getcwd(), 'plugins'),
+        pathlib.Path(os.getcwd(), 'plugins'),
         _home_config_path,
         # <SHANGHAI_PACKAGE_DIR>/plugins/
-        os.path.join(os.path.dirname(__file__), 'plugins'),
+        pathlib.Path(pathlib.Path(__file__).parent, 'plugins'),
     ]
 
     plugin_registry = {}
     plugin_factory = Plugin
 
     @classmethod
-    def load_plugin(cls, identifier, *, dependency_path=None):
+    def load_plugin(cls, identifier, *, dependency_path=None, is_core=False):
         if dependency_path is None:
             dependency_path = []
         if identifier in cls.plugin_registry:
@@ -80,17 +81,17 @@ class PluginSystem:
         return plugin
 
     @classmethod
-    def _find_module_path(cls, search_path, identifier):
-        path = os.path.join(search_path, identifier)
-        module_path = path + '.py'
-        if not os.path.exists(module_path):
-            raise FileNotFoundError('No such file {!r}'.format(module_path))
-        if os.path.isfile(module_path):
+    def _find_module_path(cls, search_path: pathlib.Path, identifier) -> pathlib.Path:
+        path = pathlib.Path(search_path, identifier)
+        module_path = path.with_suffix('.py')
+        if not module_path.exists():
+            raise FileNotFoundError('No such file {!r}'.format(str(module_path)))
+        if module_path.is_file():
             return module_path
-        raise OSError('Error trying to load {!r}'.format(path))
+        raise OSError('Error trying to load {!r}'.format(str(path)))
 
     @classmethod
-    def _load_plugin_as_module(cls, path, identifier, *, dependency_path):
+    def _load_plugin_as_module(cls, path: pathlib.Path, identifier, *, dependency_path):
         # TODO: load dependencies first!
         info = cls._get_plugin_info(path, identifier)
         # info['depends'] and info['conflicts']
@@ -115,8 +116,8 @@ class PluginSystem:
         return plugin
 
     @staticmethod
-    def _get_plugin_info(filename, identifier):
-        with open(filename, 'r', encoding='utf-8') as f:
+    def _get_plugin_info(filename: pathlib.Path, identifier):
+        with filename.open('r', encoding='utf-8') as f:
             tree = ast.parse(f.read(), filename)
 
         info = OrderedDict([
@@ -171,6 +172,6 @@ class PluginSystem:
         if required_ids:
             # TODO: Use better exception.
             raise RuntimeError('Missing {} in {}'.format(
-                ', '.join('__plugin_{}__'.format(i) for i in required_ids), filename))
+                ', '.join('__plugin_{}__'.format(i) for i in required_ids), str(filename)))
 
         return info
