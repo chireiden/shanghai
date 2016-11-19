@@ -1,4 +1,6 @@
 
+from collections import namedtuple
+
 from .server_reply import ServerReply
 from ..logging import current_logger
 
@@ -10,6 +12,30 @@ _ESCAPE_SEQUENCES = {
     '\\': '\\',
     ':': ';',
 }
+
+
+class Prefix(namedtuple("_Prefix", "name ident host")):
+
+    __slots__ = ()
+
+    @classmethod
+    def from_string(cls, prefix):
+        name = prefix.lstrip(':')
+        ident = None
+        host = None
+        if '@' in name:
+            name, host = name.split('@', 1)
+            if '!' in name:
+                name, ident = name.split('!', 1)
+        return cls(name, ident, host)
+
+    def __str__(self):
+        fmt = "{s.name}"
+        if self.host:
+            if self.ident:
+                fmt += "!{s.ident}"
+            fmt += "@{s.host}"
+        return fmt.format(s=self)
 
 
 class Message:
@@ -68,16 +94,8 @@ class Message:
                 tags[key] = value
 
         if line.startswith(':'):
-            # prefix
-            prefix, line = line.split(None, 1)
-            name = prefix[1:]
-            ident = None
-            host = None
-            if '@' in name:
-                name, host = name.split('@', 1)
-                if '!' in name:
-                    name, ident = name.split('!', 1)
-            prefix = name, ident, host
+            prefix_str, line = line.split(None, 1)
+            prefix = Prefix.from_string(prefix_str)
 
         command, *line = line.split(None, 1)
         command = command.upper()  # TODO check if really case-insensitive

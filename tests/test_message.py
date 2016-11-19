@@ -1,7 +1,36 @@
 
 from unittest import TestCase
-from shanghai.irc import Message, ServerReply
+from shanghai.irc import Prefix, Message, ServerReply
 from shanghai.logging import LogContext, set_logging_config
+
+
+class TestPrefix(TestCase):
+
+    def test_from_string(self):
+        prefix = Prefix.from_string(":nick")
+        assert prefix == ("nick", None, None)
+
+    def test_prefix(self):
+        prefix = Prefix.from_string(':nick!user@host')
+        assert prefix == ('nick', 'user', 'host')
+
+        prefix = Prefix.from_string(':nick@host')
+        assert prefix == ('nick', None, 'host')
+
+        # rfc2812 requires @host before !user
+        prefix = Prefix.from_string(':nick!user')
+        assert prefix == ('nick!user', None, None)
+
+        prefix = Prefix.from_string(':nick')
+        assert prefix == ('nick', None, None)
+
+        # without colon
+        prefix = Prefix.from_string('nick!user@host')
+        assert prefix == ('nick', 'user', 'host')
+
+        # nothing
+        prefix = Prefix.from_string('')
+        assert prefix == ('', None, None)
 
 
 class TestMessage(TestCase):
@@ -26,16 +55,6 @@ class TestMessage(TestCase):
         m = Message.from_line(':nick!user@host PRIVMSG #channel :msg')
         self.assertEqual(m.prefix, ('nick', 'user', 'host'))
 
-        m = Message.from_line(':nick@host PRIVMSG #channel :msg')
-        self.assertEqual(m.prefix, ('nick', None, 'host'))
-
-        m = Message.from_line(':nick!user PRIVMSG #channel :msg')
-        # rfc2812 requires @host before !user
-        self.assertEqual(m.prefix, ('nick!user', None, None))
-
-        m = Message.from_line(':nick PRIVMSG #channel :msg')
-        self.assertEqual(m.prefix, ('nick', None, None))
-
         # test no prefix
         m = Message.from_line('PRIVMSG #channel :message test')
         self.assertIsNone(m.prefix)
@@ -50,8 +69,7 @@ class TestMessage(TestCase):
         self.assertEqual(m.command, '1234')
 
     def test_tags(self):
-        m = Message.from_line('@tag=value;tag2=val\\nue2;tag3 '
-                              ':prefix CMD p1 :p2 long')
+        m = Message.from_line('@tag=value;tag2=val\\nue2;tag3 :prefix CMD p1 :p2 long')
         # test if all other args still work correctly
         self.assertEqual(m.command, 'CMD')
         self.assertEqual(m.params, ['p1', 'p2 long'])
@@ -78,9 +96,9 @@ class TestMessage(TestCase):
             repr(m),
             re.compile(r'''
                 Message\(["']PRIVMSG["'],\s*
-                    prefix=\(
-                        ["']nick["'],\s*
-                        ["']user["'],\s*
-                        ["']host["']\),\s*
+                    prefix=Prefix\(
+                        name=["']nick["'],\s*
+                        ident=["']user["'],\s*
+                        host=["']host["']\),\s*
                     params=\[["']\#channel["'],\s*["']message["']\],\s*
                     tags=\{\}\)''', re.X))
