@@ -32,8 +32,6 @@ class Network(ShadowAttributesMixin):
         self._server_iter = itertools.cycle(self.config['servers'])
         self._connection = None
         self._worker_task_failure_timestamps = []
-        self._ping_timeout_handle = None
-        self._send_ping_handle = None
 
         self._reset()
 
@@ -48,8 +46,6 @@ class Network(ShadowAttributesMixin):
         self._connection_task = None
         self._worker_task = None
         self.stopped = False
-
-        self.unset_ping_timeout_handlers()
 
         server = next(self._server_iter)
         self.event_queue = asyncio.Queue()
@@ -116,31 +112,6 @@ class Network(ShadowAttributesMixin):
         self.send_cmd('USER', self.user, '*', '*', self.realname)
         # TODO add listener for ERR_NICKNAMEINUSE here;
         # maybe also add a listener for RPL_WELCOME to clear this listener
-
-    def ping_timeout(self):
-        current_logger.info('Detected ping timeout.')
-        self._connection_task.cancel()
-
-    def send_ping(self):
-        current_logger.info('Sending ping to test if connection is alive.')
-        self.send_cmd('PING', str(int(time.time())))
-
-    def unset_ping_timeout_handlers(self):
-        if self._ping_timeout_handle is not None:
-            self._ping_timeout_handle.cancel()
-            self._ping_timeout_handle = None
-        if self._send_ping_handle is not None:
-            self._send_ping_handle.cancel()
-            self._send_ping_handle = None
-
-    def set_ping_timeout_handlers(self):
-        loop = asyncio.get_event_loop()
-        # TODO: take timeouts from config
-        # suggestions:
-        # - _ping_timeout_handle - minimun: 5 minutes; maximum: unlimited
-        # - _send_ping_handle - minimum: 4 minutes; maximum: _ping_timeout_handle - 1 minute
-        self._ping_timeout_handle = loop.call_later(5 * 60, self.ping_timeout)
-        self._send_ping_handle = loop.call_later(4 * 60, self.send_ping)
 
     async def _init_worker(self):
         # First item on queue should be "connected", with the connection
@@ -240,18 +211,6 @@ async def on_disconnected(network, _):
 async def on_close_request(network, quitmsg):
     current_logger.info('closing connection')
     network._close(quitmsg)
-
-
-@core_network_event(NetworkEventName.MESSAGE)
-async def on_message(network, _):
-    network.unset_ping_timeout_handlers()
-    network.set_ping_timeout_handlers()
-
-
-@core_message_event('PING')
-async def on_ping(network, message):
-    if message.command == 'PING':
-        network.send_cmd('PONG', *message.params)
 
 
 @core_message_event(ServerReply.RPL_WELCOME)
