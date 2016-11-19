@@ -7,7 +7,7 @@ import sys
 
 import colorama
 
-from .core import Shanghai
+from . import Shanghai
 from .config import Configuration
 from .logging import current_logger, LogContext, set_logging_config, LogLevels
 
