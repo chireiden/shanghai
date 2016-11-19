@@ -103,16 +103,6 @@ class Network(ShadowAttributesMixin):
             self._worker_task = asyncio.ensure_future(self._worker(restarted=True))
             self._worker_task.add_done_callback(self._worker_done)
 
-    def start_register(self):
-        # testing
-        self.original_nickname = self.nickname = self.config['nick']
-        self.user = self.config['user']
-        self.realname = self.config['realname']
-        self.send_cmd('NICK', self.nickname)
-        self.send_cmd('USER', self.user, '*', '*', self.realname)
-        # TODO add listener for ERR_NICKNAMEINUSE here;
-        # maybe also add a listener for RPL_WELCOME to clear this listener
-
     async def _init_worker(self):
         # First item on queue should be "connected", with the connection
         # as its value
@@ -129,9 +119,6 @@ class Network(ShadowAttributesMixin):
             assert event.name == "connected", event
             assert self._connection == event.value, (event, self._connection)
             await network_event_dispatcher.dispatch(self, event)
-
-        # start register process
-        self.start_register()
 
     async def _worker(self, restarted=False):
         """Dispatches events from the event queue."""
@@ -193,7 +180,6 @@ async def on_raw_line(network, raw_line: bytes):
         current_logger.exception('-->', line)
         raise exc
 
-    # TODO use message_event_dispatcher.dispatch directly?
     await message_event_dispatcher.dispatch(network, msg)
 
 
@@ -215,17 +201,16 @@ async def on_close_request(network, quitmsg):
 
 @core_message_event(ServerReply.RPL_WELCOME)
 async def on_msg_welcome(network, message):
-    if message.command == ServerReply.RPL_WELCOME:
-        network.nickname = message.params[0]
-        network.send_cmd('MODE', network.nickname, '+B')
+    network.nickname = message.params[0]
+    network.send_cmd('MODE', network.nickname, '+B')
 
-        # join test channel
-        for channel, chanconf in network.config['channels'].items():
-            key = chanconf.get('key', None)
-            if key is not None:
-                network.send_cmd('JOIN', channel, key)
-            else:
-                network.send_cmd('JOIN', channel)
+    # join channels
+    for channel, chanconf in network.config['channels'].items():
+        key = chanconf.get('key', None)
+        if key is not None:
+            network.send_cmd('JOIN', channel, key)
+        else:
+            network.send_cmd('JOIN', channel)
 
 
 @core_message_event(ServerReply.RPL_ISUPPORT)
@@ -233,10 +218,25 @@ async def on_msg_isupport(network, message):
     network.options.extend_from_message(message)
 
 
-@core_message_event(ServerReply.ERR_NICKNAMEINUSE)
-async def on_msg_nickinuse(network, _):
-    def inc_suffix(m):
-        num = m.group(1) or 0
-        return str(int(num) + 1)
-    network.nickname = re.sub(r"(\d*)$", inc_suffix, network.nickname)
+@core_network_event(NetworkEventName.CONNECTED)
+async def register_connection(network, _):
+    # testing
+    network.original_nickname = network.nickname = network.config['nick']
+    network.user = network.config['user']
+    network.realname = network.config['realname']
     network.send_cmd('NICK', network.nickname)
+    network.send_cmd('USER', network.user, '*', '*', network.realname)
+
+    @core_message_event(ServerReply.ERR_NICKNAMEINUSE)
+    async def nick_in_use(network, _):
+        def inc_suffix(m):
+            num = m.group(1) or 0
+            return str(int(num) + 1)
+        network.nickname = re.sub(r"(\d*)$", inc_suffix, network.nickname)
+        network.send_cmd('NICK', network.nickname)
+
+    # Clear the above hooks since we only want to negotiate a nick until we found a free one
+    @core_message_event(ServerReply.RPL_WELCOME)
+    async def register_done(network, _):
+        nick_in_use.unregister()
+        register_done.unregister()
