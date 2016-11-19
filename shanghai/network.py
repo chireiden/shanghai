@@ -1,5 +1,6 @@
 
 import asyncio
+import functools
 import io
 import itertools
 import re
@@ -199,6 +200,44 @@ class Network:
         # TODO use Queue.put_nowait?
         close_event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         await self.event_queue.put(close_event)
+
+    # classattribute
+    added_attributes = dict()
+    added_methods = set()
+
+    @classmethod
+    def add_attribute(cls, name, value):
+        """Allows for plugins to add attributes to the network object.
+
+        Use this instead of directly setting attributes (or with `setattr`).
+        For adding methods, use add_method.
+        """
+        if hasattr(cls, name) or name in cls.added_attributes:
+            raise KeyError("Attribute '{}' is already defined".format(name))
+        cls.added_attributes[name] = value
+
+    @classmethod
+    def add_method(cls, name, method):
+        """Allows for plugins to add methods to the network object.
+
+        Use this instead of directly setting attributes (or with `setattr`).
+        """
+        if not callable(method):
+            raise ValueError("Not callable")
+
+        cls.add_attribute(name, method)
+        cls.added_methods.add(name)
+
+    def __getattr__(self, name):
+        if name in self.added_attributes:
+            attr = self.added_attributes[name]
+            if name in self.added_methods:
+                # Wrap callable with `self` because it would be missing otherwise.
+                return functools.partial(attr, self)
+            else:
+                return attr
+        else:
+            super().__getattr__(name)
 
 
 # Core event handlers #############################################################################
