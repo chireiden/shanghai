@@ -60,7 +60,8 @@ class PluginSystem:
         if dependency_path is None:
             dependency_path = []
         if identifier in cls.plugin_registry:
-            current_logger.warn('Plugin', identifier, 'already exists.')
+            if not dependency_path:
+                current_logger.warn('Plugin', identifier, 'already exists.')
             return cls.plugin_registry[identifier]
         for search_path in cls.PLUGIN_SEARCH_PATHS:
             try:
