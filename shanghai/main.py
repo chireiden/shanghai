@@ -15,6 +15,7 @@ from .logging import current_logger, LogContext, set_logging_config, LogLevels
 def exception_handler(loop, context):  # pylint: disable=unused-argument
     f = io.StringIO()
     print("Unhandled Exception", file=f)
+    print("Message: ", context['message'], file=f)
     print("-- Context --", file=f)
     pprint(context, stream=f)
 
@@ -100,9 +101,10 @@ def main():
         # For debugging purposes mainly
         async def input_handler(line):
             """Handle stdin input while running. Send lines to networks."""
-            if ' ' not in line:
+            split = line.split(None, 1)
+            if len(split) < 2:
                 return
-            nw_name, irc_line = line.split(None, 1)
+            nw_name, irc_line = split
             if nw_name and irc_line:
                 if nw_name not in bot.networks:
                     print("network '{}' not found".format(nw_name))

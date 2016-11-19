@@ -34,23 +34,39 @@ class _PrioritizedSetList:
         self.list = list()
 
     def add(self, priority: int, obj):
-        # TODO prevent duplicates
+        if obj in self:
+            raise ValueError("Object {!r} has already been added".format(obj))
+
+        i = -1
         for i, (prio, set_) in enumerate(self.list):
             if priority > prio:
-                self.list.insert(i, obj)
                 break
             elif priority == prio:
                 set_.add(obj)
-                break
+                return
         else:
-            self.list.append((priority, {obj}))
+            i = i + 1  # 0 if empty; len(self.list) if priority < all others
+
+        self.list.insert(i, (priority, {obj}))
 
     def remove(self, obj):
-        # TODO remove set entirely if empty
-        raise NotImplementedError()
+        for i, (prio, set_) in enumerate(self.list):
+            if obj in set_:
+                set_.remove(obj)
+                if not set_:
+                    del self.list[i]
+                return
+        else:
+            raise ValueError("Object {!r} can not be found".format(obj))
 
     def __iter__(self):
         return iter(self.list)
+
+    def __contains__(self, obj):
+        return any(obj in set_ for _, set_ in self)
+
+    def __bool__(self):
+        return bool(self.list)
 
     # def sort(self):
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
@@ -63,10 +79,19 @@ class EventDispatcher:
     def __init__(self):
         self.event_map = defaultdict(_PrioritizedSetList)
 
+    def unregister(self, name: str, coroutine):
+        self.event_map[name].remove(coroutine)
+
     def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
+        if not asyncio.iscoroutinefunction(coroutine):
+            raise ValueError("callable must be a coroutine function (defined with `async def`)")
+
         self.event_map[name].add(priority, coroutine)
 
     async def dispatch(self, name: str, *args):
+        if name not in self.event_map:
+            return
+
         for priority, handlers in self.event_map[name]:
             current_logger.ddebug("Starting tasks for event '{}' with priority {}"
                                   .format(name, priority))
@@ -99,10 +124,14 @@ message_event_dispatcher = MessageEventDispatcher()
 
 # decorator
 def network_event(name, priority=Priority.DEFAULT):
+    if name not in NetworkEventName.__members__.values():
+        raise ValueError("Unknown network event name '{}'".format(name))
+
+    dispatcher = network_event_dispatcher
+
     def deco(coroutine):
-        if name not in NetworkEventName.__members__.values():
-            raise ValueError("Unknown network event name '{}'".format(name))
-        network_event_dispatcher.register(name, coroutine, priority)
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
         return coroutine
 
     return deco
@@ -110,17 +139,14 @@ def network_event(name, priority=Priority.DEFAULT):
 
 # decorator
 def message_event(name, priority=Priority.DEFAULT):
+    dispatcher = message_event_dispatcher
+
     def deco(coroutine):
-        message_event_dispatcher.register(name, coroutine, priority)
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
         return coroutine
 
     return deco
 
 core_network_event = functools.partial(network_event, priority=Priority.CORE)
 core_message_event = functools.partial(message_event, priority=Priority.CORE)
-
-
-@core_network_event('message')
-async def message_event_worker(network, msg):
-    await message_event_dispatcher.dispatch(network, msg)
-    # TODO interpret results?

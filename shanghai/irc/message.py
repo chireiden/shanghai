@@ -1,4 +1,7 @@
 
+from collections import namedtuple
+from typing import Dict, List
+
 from .server_reply import ServerReply
 from ..logging import current_logger
 
@@ -12,10 +15,37 @@ _ESCAPE_SEQUENCES = {
 }
 
 
+class Prefix(namedtuple("_Prefix", "name ident host")):
+
+    __slots__ = ()
+
+    @classmethod
+    def from_string(cls, prefix: str) -> 'Prefix':
+        name = prefix.lstrip(':')
+        ident = None
+        host = None
+        if '@' in name:
+            name, host = name.split('@', 1)
+            if '!' in name:
+                name, ident = name.split('!', 1)
+        return cls(name, ident, host)
+
+    def __str__(self) -> str:
+        fmt = "{s.name}"
+        if self.host:
+            if self.ident:
+                fmt += "!{s.ident}"
+            fmt += "@{s.host}"
+        return fmt.format(s=self)
+
+
 class Message:
 
-    def __init__(self, command, *, prefix=None, params=None, tags=None,
-                 raw_line=None):
+    def __init__(self, command: str, *,
+                 prefix: Prefix = None,
+                 params: List[str] = None,
+                 tags: Dict[str, str] = None,
+                 raw_line: str = None):
         self.command = command
         self.prefix = prefix
         self.params = params if params is not None else []
@@ -23,7 +53,7 @@ class Message:
         self.raw_line = raw_line
 
     @staticmethod
-    def escape(value):
+    def escape(value: str) -> str:
         out_value = ''
         sequences = {v: k for k, v in _ESCAPE_SEQUENCES.items()}
         for char in value:
@@ -34,7 +64,7 @@ class Message:
         return out_value
 
     @staticmethod
-    def unescape(value):
+    def unescape(value: str) -> str:
         out_value = ''
         escape = False
         for char in value:
@@ -49,7 +79,7 @@ class Message:
         return out_value
 
     @classmethod
-    def from_line(cls, line):
+    def from_line(cls, line) -> 'Message':
         # https://tools.ietf.org/html/rfc2812#section-2.3.1
         # http://ircv3.net/specs/core/message-tags-3.2.html
         raw_line = line
@@ -68,16 +98,8 @@ class Message:
                 tags[key] = value
 
         if line.startswith(':'):
-            # prefix
-            prefix, line = line.split(None, 1)
-            name = prefix[1:]
-            ident = None
-            host = None
-            if '@' in name:
-                name, host = name.split('@', 1)
-                if '!' in name:
-                    name, ident = name.split('!', 1)
-            prefix = name, ident, host
+            prefix_str, line = line.split(None, 1)
+            prefix = Prefix.from_string(prefix_str)
 
         command, *line = line.split(None, 1)
         command = command.upper()  # TODO check if really case-insensitive
@@ -104,7 +126,7 @@ class Message:
         return cls(command, prefix=prefix, params=params, tags=tags,
                    raw_line=raw_line)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             '{s.__class__.__name__}({s.command!r}, prefix={s.prefix!r},'
             ' params={s.params!r}, tags={s.tags!r})'.format(s=self)

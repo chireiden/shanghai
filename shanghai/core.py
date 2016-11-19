@@ -14,12 +14,14 @@ class Shanghai:
         # not sure where else to put it. maybe an init_plugins here?
         # but this is just for testing for now.
         self.plugin_system = PluginSystem()
+        self.plugin_system.load_plugin('ping')
         self.plugin_system.load_plugin('ctcp')
+        self.plugin_system.load_plugin('test')
 
     def init_networks(self):
         for netconf in self.config.networks:
             name = netconf['name']
-            network = Network(name, netconf['config'])
+            network = Network(name, netconf['config'], loop=self.loop)
             network_task = asyncio.ensure_future(network.run(), loop=self.loop)
             self.networks[name] = dict(
                 task=network_task,
