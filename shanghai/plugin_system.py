@@ -8,6 +8,10 @@ import sys
 from .logging import current_logger
 
 
+class CyclicDependency(Exception):
+    pass
+
+
 class Plugin:
 
     def __init__(self, info, module):
@@ -26,7 +30,7 @@ class Plugin:
         func_ref(self)
 
     def __repr__(self):
-        return '<Plugin {identifier}: {name} v{version} - {description}>'.format(**self.info)
+        return '<Plugin {identifier}: {name} {version} - {description}>'.format(**self.info)
 
 
 class PluginSystem:
@@ -51,17 +55,20 @@ class PluginSystem:
     plugin_factory = Plugin
 
     @classmethod
-    def load_plugin(cls, identifier):
-        current_logger.info('Loading plugin', identifier)
+    def load_plugin(cls, identifier, *, dependency_path=None):
+        if dependency_path is None:
+            dependency_path = []
         if identifier in cls.plugin_registry:
             current_logger.warn('Plugin', identifier, 'already exists.')
             return cls.plugin_registry[identifier]
         for search_path in cls.PLUGIN_SEARCH_PATHS:
             try:
-                plugin = cls.load_from_path(search_path, identifier)
+                module_path = cls._find_module_path(search_path, identifier)
             except OSError:
                 pass
             else:
+                plugin = cls._load_plugin_as_module(module_path, identifier,
+                                                    dependency_path=dependency_path)
                 break
         else:  # I always wanted to use this at least once
             raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
@@ -73,21 +80,30 @@ class PluginSystem:
         return plugin
 
     @classmethod
-    def load_from_path(cls, search_path, identifier):
+    def _find_module_path(cls, search_path, identifier):
         path = os.path.join(search_path, identifier)
         module_path = path + '.py'
         if not os.path.exists(module_path):
             raise FileNotFoundError('No such file {!r}'.format(module_path))
         if os.path.isfile(module_path):
-            return cls._load_plugin_as_module(module_path, identifier)
+            return module_path
         raise OSError('Error trying to load {!r}'.format(path))
 
     @classmethod
-    def _load_plugin_as_module(cls, path, identifier):
+    def _load_plugin_as_module(cls, path, identifier, *, dependency_path):
         # TODO: load dependencies first!
         info = cls._get_plugin_info(path, identifier)
         # info['depends'] and info['conflicts']
+        for dependency in info['depends']:
+            if dependency in dependency_path:
+                raise CyclicDependency('Cyclic dependency detected: {}'
+                                       .format(' -> '.join([identifier] + dependency_path)))
+            cls.load_plugin(dependency, dependency_path=dependency_path + [identifier])
 
+        if dependency_path:
+            current_logger.info('Loading plugin', identifier, 'as dependency of', dependency_path)
+        else:
+            current_logger.info('Loading plugin', identifier)
         spec = importlib.util.spec_from_file_location(identifier, path)
 
         module = importlib.util.module_from_spec(spec)
@@ -122,19 +138,35 @@ class PluginSystem:
             target = statement.targets[0]
             if not isinstance(target, ast.Name):
                 continue
-            if not isinstance(statement.value, ast.Str):
-                continue
             if not target.id.startswith('__plugin_') or not target.id.endswith('__'):
                 continue
-
             _id = target.id.strip('_')[7:]
+
+            if _id in ('depends', 'conflicts'):
+                listing = statement.value
+                if not isinstance(listing, (ast.List, ast.Tuple)):
+                    raise TypeError('Plugin {}: {} must be a list or a tuple.'
+                                    .format(identifier, target.id))
+                value = []
+                for element in listing.elts:
+                    if not isinstance(element, ast.Str):
+                        raise TypeError('Plugin {}: {} must be a list/tuple and must only'
+                                        ' contain strings.'.format(identifier, target.id))
+                    value.append(element.s)
+            else:
+                if not isinstance(statement.value, ast.Str):
+                    raise TypeError('Plugin {}: {} can only be a string.'
+                                    .format(identifier, target.id))
+                value = statement.value.s
+
             if _id in ignore_ids:
                 continue
             if _id not in info:
                 continue
 
-            required_ids.remove(_id)  # might throw error if __plugin_name__ etc. occures twice
-            info[_id] = statement.value.s
+            if _id in required_ids:
+                required_ids.remove(_id)
+            info[_id] = value
 
         if required_ids:
             # TODO: Use better exception.
