@@ -133,6 +133,15 @@ class Network(ShadowAttributesMixin):
 
         current_logger.debug('exiting worker task')
 
+    def _close(self, quitmsg: str = None):
+        current_logger.info("closing network")
+        if quitmsg:
+            self.send_cmd('QUIT', quitmsg)
+        else:
+            self.send_cmd('QUIT')
+        self._connection.close()
+        self.stopped = True
+
     def send_line(self, line: str):
         self._connection.writeline(line.encode(self.encoding))
 
@@ -149,15 +158,6 @@ class Network(ShadowAttributesMixin):
     def send_notice(self, target, text):
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('NOTICE', target, text)
-
-    def _close(self, quitmsg: str = None):
-        current_logger.info("closing network")
-        if quitmsg:
-            self.send_cmd('QUIT', quitmsg)
-        else:
-            self.send_cmd('QUIT')
-        self._connection.close()
-        self.stopped = True
 
     async def request_close(self, quitmsg: str = None):
         # TODO use Queue.put_nowait?
