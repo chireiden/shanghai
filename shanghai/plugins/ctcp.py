@@ -1,9 +1,12 @@
 
 import functools
 
-from shanghai.event import Priority, MessageEventDispatcher, core_message_event
+from shanghai.event import (
+    Priority, MessageEventDispatcher, core_message_event,
+    core_network_event, NetworkEventName
+)
 from shanghai.irc import Message
-from shanghai.network import Network
+from shanghai.context import Context
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.0.2'
@@ -35,23 +38,24 @@ class CtcpMessage(Message):
         return cls(ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
 
 
-def send_ctcp(network, target: str, command: str, text: str = None):
+def send_ctcp(ctx: Context, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
     text = '\x01{}{}\x01'.format(command, text)
-    return network.send_msg(target, text)
+    return ctx.send_msg(target, text)
 
 
-def send_ctcp_reply(network, target: str, command: str, text: str = None):
+def send_ctcp_reply(ctx: Context, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
     text = '\x01{}{}\x01'.format(command, text)
-    return network.send_notice(target, text)
+    return ctx.send_notice(target, text)
 
 
-# add these to the network class
-Network.add_cls_method('send_ctcp', send_ctcp)
-Network.add_cls_method('send_ctcp_reply', send_ctcp_reply)
+@core_network_event(NetworkEventName.INIT_CONTEXT)
+async def init_context(ctx: Context, _):
+    Context.add_cls_method('send_ctcp', send_ctcp)
+    Context.add_cls_method('send_ctcp_reply', send_ctcp_reply)
 
 
 # provide an event dispatcher for CTCP events
@@ -71,14 +75,14 @@ def ctcp_event(name, priority=Priority.DEFAULT):
 
 
 @core_message_event('PRIVMSG')
-async def privmsg(network, msg: Message):
+async def privmsg(ctx: Context, msg: Message):
     ctcp_msg = CtcpMessage.from_message(msg)
     if ctcp_msg:
-        await ctcp_event_dispatcher.dispatch(network, ctcp_msg)
+        await ctcp_event_dispatcher.dispatch(ctx, ctcp_msg)
 
 
 # example ctcp_event hook
 @ctcp_event('VERSION')
-async def version_request(network, msg: CtcpMessage):
+async def version_request(ctx: Context, msg: CtcpMessage):
     source = msg.prefix[0]
-    network.send_ctcp_reply(source, 'VERSION', 'Shanghai v37')
+    ctx.send_ctcp_reply(source, 'VERSION', 'Shanghai v37')

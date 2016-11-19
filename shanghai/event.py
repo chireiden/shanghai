@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 import functools
 import enum
 
-from .logging import current_logger
+from .logging import get_default_logger
 
 NetworkEvent = namedtuple("NetworkEvent", "name value")
 NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional
@@ -16,6 +16,7 @@ class NetworkEventName(str, enum.Enum):
     CLOSE_REQUEST = "close_request"
     MESSAGE = "message"
     RAW_LINE = "raw_line"
+    INIT_CONTEXT = "init_context"
 
 
 class Priority(int, enum.Enum):
@@ -93,25 +94,25 @@ class EventDispatcher:
             return
 
         for priority, handlers in self.event_map[name]:
-            current_logger.ddebug("Starting tasks for event '{}' with priority {}"
-                                  .format(name, priority))
+            get_default_logger().ddebug("Starting tasks for event '{}' with priority {}"
+                                        .format(name, priority))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
             results = await asyncio.gather(*tasks)
-            current_logger.ddebug("Results from event event '{}' with priority {}: {}"
-                                  .format(name, priority, results))
+            get_default_logger().ddebug("Results from event event '{}' with priority {}: {}"
+                                        .format(name, priority, results))
             # TODO interpret results, handle exceptions
 
 
 class NetworkEventDispatcher(EventDispatcher):
 
-    async def dispatch(self, network, event: NetworkEvent):
-        return await super().dispatch(event.name, network, event.value)
+    async def dispatch(self, ctx, event: NetworkEvent):
+        return await super().dispatch(event.name, ctx, event.value)
 
 
 class MessageEventDispatcher(EventDispatcher):
 
-    async def dispatch(self, network, msg):
-        return await super().dispatch(msg.command, network, msg)
+    async def dispatch(self, ctx, msg):
+        return await super().dispatch(msg.command, ctx, msg)
 
 
 class OutMessageEventDispatcher(MessageEventDispatcher):
