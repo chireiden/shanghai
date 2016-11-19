@@ -100,9 +100,10 @@ def main():
         # For debugging purposes mainly
         async def input_handler(line):
             """Handle stdin input while running. Send lines to networks."""
-            if ' ' not in line:
+            split = line.split(None, 1)
+            if len(split) < 2:
                 return
-            nw_name, irc_line = line.split(None, 1)
+            nw_name, irc_line = split
             if nw_name and irc_line:
                 if nw_name not in bot.networks:
                     print("network '{}' not found".format(nw_name))
