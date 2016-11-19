@@ -17,9 +17,11 @@ from .logging import LogContext, current_logger, with_log_context
 class Network:
     """Sample Network class"""
 
-    def __init__(self, name, config):
+    def __init__(self, name, config, loop=None):
         self.name = name
         self.config = config
+        self.loop = loop
+
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
 
