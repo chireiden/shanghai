@@ -3,6 +3,7 @@ import ast
 from collections import OrderedDict
 import importlib.util
 import os
+import sys
 
 from .logging import current_logger
 
@@ -29,15 +30,19 @@ class Plugin:
 
 
 class PluginSystem:
+    if sys.platform == 'win32':
+        # %APPDATA%/shanghai/plugins
+        _home_config_path = os.path.expandvars(R"%APPDATA%\shanghai\plugins")
+    else:
+        # ~/.config/shanghai/plugins
+        _home_config_path = os.path.expanduser("~/.config/shanghai/plugins")
 
     # TODO: add configuration location
     PLUGIN_SEARCH_PATHS = [
         # ./plugins/
+        # TODO might be redundant
         os.path.join(os.getcwd(), 'plugins'),
-
-        # ~/.config/shanghai/plugins/
-        os.path.join(os.environ['HOME'], '.config', 'shanghai', 'plugins'),
-
+        _home_config_path,
         # <SHANGHAI_PACKAGE_DIR>/plugins/
         os.path.join(os.path.dirname(__file__), 'plugins'),
     ]
