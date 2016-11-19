@@ -18,3 +18,8 @@ async def on_privmsg(network, message):
 
     elif words[0] == '!quit':
         await network.request_close(line)
+
+    elif words[0] == '!ctcp':
+        if len(words) < 2:
+            return
+        network.send_ctcp(message.prefix.name, words[1], ' '.join(words[2:]))

@@ -1,10 +1,13 @@
 
-from shanghai.irc.message import Message
-from shanghai.event import message_event, message_event_dispatcher
+import functools
 
-__plugin_name__ = 'CTCP Plugin'
-__plugin_version__ = '0.0.1'
-__plugin_description__ = 'CTCP Message processing.'
+from shanghai.event import Priority, MessageEventDispatcher, core_message_event
+from shanghai.irc import Message
+from shanghai.network import Network
+
+__plugin_name__ = 'CTCP'
+__plugin_version__ = '0.0.2'
+__plugin_description__ = 'CTCP Message processing'
 
 
 class CtcpMessage(Message):
@@ -12,55 +15,70 @@ class CtcpMessage(Message):
     def __repr__(self):
         return '<CTCP command={!r} params={!r}>'.format(self.command, self.params)
 
-
-def build_ctcp(target, command, params):
-    args = [command, *params]
-    return 'PRIVMSG', target, '\x01{}\x01'.format(' '.join(args))
-
-
-def build_ctcp_reply(target, command, params):
-    args = [command, *params]
-    return 'NOTICE', target, '\x01{}\x01'.format(' '.join(args))
-
-
-def parse_ctcp(line):
-    """Very primitive but should do the job for now."""
-    if not line.startswith('\x01') or not line.endswith('\x01'):
-        return
-    line = line[1:-1].rstrip()
-    if not line:
-        return
-    ctcp_cmd, *ctcp_params = line.split(' ', 1)
-    if not ctcp_cmd:
-        return
-    ctcp_cmd = ctcp_cmd.upper()
-    if ctcp_params:
-        ctcp_params = ctcp_params[0].split()
-    return ctcp_cmd, ctcp_params
+    @classmethod
+    def from_message(cls, msg: Message):
+        """Very primitive but should do the job for now."""
+        if not msg.command == 'PRIVMSG':
+            return None
+        line = msg.params[1]
+        if not line.startswith('\x01') or not line.endswith('\x01'):
+            return None
+        line = line[1:-1].rstrip()
+        if not line:
+            return None
+        ctcp_cmd, *ctcp_params = line.split(' ', 1)
+        if not ctcp_cmd:
+            return None
+        ctcp_cmd = ctcp_cmd.upper()
+        if ctcp_params:
+            ctcp_params = ctcp_params[0].split()
+        return cls(ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
 
 
-@message_event('PRIVMSG')
+def send_ctcp(network, target: str, command: str, text: str = None):
+    if text:
+        text = ' ' + text
+    text = '\x01{}{}\x01'.format(command, text)
+    return network.send_msg(target, text)
+
+
+def send_ctcp_reply(network, target: str, command: str, text: str = None):
+    if text:
+        text = ' ' + text
+    text = '\x01{}{}\x01'.format(command, text)
+    return network.send_notice(target, text)
+
+
+# add these to the network class
+Network.add_cls_method('send_ctcp', send_ctcp)
+Network.add_cls_method('send_ctcp_reply', send_ctcp_reply)
+
+
+# provide an event dispatcher for CTCP events
+ctcp_event_dispatcher = MessageEventDispatcher()
+
+
+# decorator
+def ctcp_event(name, priority=Priority.DEFAULT):
+    dispatcher = ctcp_event_dispatcher
+
+    def deco(coroutine):
+        dispatcher.register(name, coroutine, priority)
+        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
+        return coroutine
+
+    return deco
+
+
+@core_message_event('PRIVMSG')
 async def privmsg(network, msg: Message):
-    result = parse_ctcp(msg.params[1])
-    if result is None:
-        return
-    ctcp_cmd, ctcp_params = result
-    new_msg = CtcpMessage('CTCP_' + ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
-    await message_event_dispatcher.dispatch(network, new_msg)
+    ctcp_msg = CtcpMessage.from_message(msg)
+    if ctcp_msg:
+        await ctcp_event_dispatcher.dispatch(network, ctcp_msg)
 
 
-@message_event('NOTICE')
-async def notice(network, msg: Message):
-    if not msg.params or len(msg.params) < 2:
-        return
-    result = parse_ctcp(msg.params[1])
-    if result is None:
-        return
-    ctcp_cmd, ctcp_params = result
-    new_msg = CtcpMessage('CTCP_REPLY_' + ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
-    await message_event_dispatcher.dispatch(network, new_msg)
-
-
-@message_event('CTCP_VERSION')
+# example ctcp_event hook
+@ctcp_event('VERSION')
 async def version_request(network, msg: CtcpMessage):
-    network.send_cmd(*build_ctcp_reply(msg.prefix[0], 'VERSION', ['Shanghai v37']))
+    source = msg.prefix[0]
+    network.send_ctcp_reply(source, 'VERSION', 'Shanghai v37')
