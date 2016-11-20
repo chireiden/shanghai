@@ -41,6 +41,8 @@ class Configuration:
     """
 
     def __init__(self, mapping):
+        if not isinstance(mapping, c_abc.Mapping):
+            raise ValueError("Must be a mapping")
         self.mapping = mapping
 
     def get(self, item, default=None):
@@ -82,6 +84,9 @@ class FallbackConfiguration(Configuration):
 
     def __init__(self, mapping, *fallback_configs: Configuration):
         super().__init__(mapping)
+        # for fb_c in fallback_configs:
+        #     if not isinstance(fb_c, Configuration):
+        #         raise ValueError("{!r} is not an instances of {}".format(fb_c, Configuration))
         self.fallback_configs = fallback_configs
 
     def __getitem__(self, key):
@@ -128,8 +133,7 @@ class NetworkConfiguration(FallbackConfiguration):
     @staticmethod
     def _fix_channels(mapping):
         # TODO move to channels core plugin
-        mapping.setdefault('channels', {})
-        for channel, channel_conf in mapping['channels'].items():
+        for channel, channel_conf in mapping.get('channels', {}).items():
             if channel_conf is None:
                 mapping['channels'][channel] = channel_conf = {}
 
@@ -140,6 +144,11 @@ class NetworkConfiguration(FallbackConfiguration):
 
     def _parse_servers(self, mapping):
         servers = []
+        servers_conf = mapping.get('servers')
+        if not servers_conf:
+            raise ConfigurationError("Network {!r} has no servers".format(self.name))
+        if not isinstance(servers_conf, list):
+            raise ConfigurationError("Servers of Network {!r} are not a list".format(self.name))
         for server_conf in mapping.get('servers', ()):
             if isinstance(server_conf, str):
                 server = Server.from_string(server_conf)
@@ -147,15 +156,13 @@ class NetworkConfiguration(FallbackConfiguration):
                 server = Server(**server_conf)
             servers.append(server)
 
-        if not servers:
-            raise ConfigurationError('Network {} has no server'.format(self.name))
         else:
             return servers
 
     def _require_keys(self, required_keys):
-        missing_keys = {key for key in required_keys if key not in self}
+        missing_keys = sorted(key for key in required_keys if key not in self)
         if missing_keys:
-            raise ConfigurationError('Network {} is missing the following options: {}'
+            raise ConfigurationError('Network {!r} is missing the following options: {}'
                                      .format(self.name, ', '.join(missing_keys)))
 
     def __repr__(self):

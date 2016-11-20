@@ -1,87 +1,22 @@
 
-import io
 import os
-import re
 import tempfile
+from textwrap import dedent
 
 import pytest
 from ruamel import yaml as ryaml
 
 from shanghai.config import (
     Server, Configuration, ConfigurationError, ShanghaiConfiguration,
-    FallbackConfiguration, # NetworkConfiguration,
+    FallbackConfiguration, NetworkConfiguration,
 )
 
-SAMPLE_YAML = '''\
-nick: TestBot
-user: Shanghai
-realname: Sample Bot
-
-# set global logging level
-logging:
-  level: INFO
-
-networks:
-  sample_network:
-    encoding: utf-8
-    fallback_encoding: latin1
-    name: SampleNetwork
-    servers:
-      - host: irc.example.org
-        ssl: true
-      - irc.example.org:6667
-    channels:
-      foochannel:
-      barchannel: null
-      otherchannel:
-        key: some_key
-      '##foobar':
-
-  second_network:
-    name: Network2
-    servers:
-      irc.foobar.net:
-        ssl: true
-'''
-
-BROKEN_CONF_1 = '''\
-foo: bar
-
-networks:
-  sample_network:
-    encoding: utf-8
-    fallback_encoding: latin1
-    name: SampleNetwork
-    servers:
-      irc.example.org:
-'''
-
-BROKEN_CONF_2 = '''\
-nick: TestBot
-user: testuser
-realname: Test Name
-
-networks:
-  sample_network:
-    encoding: utf-8
-    fallback_encoding: latin1
-    name: SampleNetwork
-'''
-
 
 @pytest.fixture(scope='module')
-def sample_yaml():
-    return ryaml.safe_load(io.StringIO(SAMPLE_YAML))
-
-
-@pytest.fixture(scope='module')
-def broken_conf_1():
-    return ryaml.safe_load(io.StringIO(BROKEN_CONF_1))
-
-
-@pytest.fixture(scope='module')
-def broken_conf_2():
-    return ryaml.safe_load(io.StringIO(BROKEN_CONF_2))
+def load():
+    def _load(yaml_string):
+        return ryaml.safe_load(dedent(yaml_string))
+    return _load
 
 
 class TestServer:
@@ -138,6 +73,15 @@ class TestConfig:
     @pytest.fixture(scope='class')
     def c(self, fake_yaml):
         return Configuration(fake_yaml)
+
+    def test_init(self):
+        with pytest.raises(ValueError) as excinfo:
+            Configuration([])
+        excinfo.match("Must be a mapping")
+
+        with pytest.raises(ValueError) as excinfo:
+            Configuration("str")
+        excinfo.match("Must be a mapping")
 
     def test_get(self, c, fake_yaml):
         assert c.get('foo', 456) == 123
@@ -267,41 +211,134 @@ class TestFallbackConfig:
         assert 'ellipsis' in fb_c
 
 
+class TestNetworkConfig():
+
+    @pytest.fixture
+    def base_yaml(self, load):
+        return load("""\
+            name: Network2
+            nick: Nick
+            user: User
+            realname: Realname
+            servers:
+              - irc.foobar.net:+
+        """)
+
+    def test_init(self, base_yaml):
+        nw_c = NetworkConfiguration("my_netw", base_yaml)
+        assert nw_c.name == "my_netw"
+
+    def test_require_keys(self, base_yaml):
+        test_yaml = base_yaml.copy()
+
+        del test_yaml['nick']
+        with pytest.raises(ConfigurationError) as excinfo:
+            NetworkConfiguration("my_netw", test_yaml)
+        excinfo.match("Network ['\"]my_netw['\"] is missing the following options: nick")
+
+        del test_yaml['user']
+        del test_yaml['realname']
+        with pytest.raises(ConfigurationError) as excinfo:
+            NetworkConfiguration("my_netw", test_yaml)
+        excinfo.match("Network ['\"]my_netw['\"] is missing the following options: "
+                      "nick, realname, user")
+
+    def test_parse_servers(self, base_yaml):
+        nw_c = NetworkConfiguration("my_netw", base_yaml)
+        assert len(nw_c.servers) == 1
+        assert isinstance(nw_c.servers[0], Server)
+        assert nw_c.servers[0].host == "irc.foobar.net"
+        assert nw_c.servers[0].port == 6697
+        assert nw_c.servers[0].ssl is True
+
+        del base_yaml['servers'][0]
+        with pytest.raises(ConfigurationError) as excinfo:
+            NetworkConfiguration("my_netw", base_yaml)
+        excinfo.match("Network ['\"]my_netw['\"] has no servers")
+
+        base_yaml['servers'] = "a string"
+        with pytest.raises(ConfigurationError) as excinfo:
+            NetworkConfiguration("my_netw", base_yaml)
+        excinfo.match("Servers of Network ['\"]my_netw['\"] are not a list")
+
+        del base_yaml['servers']
+        with pytest.raises(ConfigurationError) as excinfo:
+            NetworkConfiguration("my_netw", base_yaml)
+        excinfo.match("Network ['\"]my_netw['\"] has no servers")
+
+    @pytest.mark.skip("feature to be moved elsewhere")
+    def test_fix_channels(self):
+        pass
+
+
 class TestShanghaiConfig:
 
-    def test_fileloading(self, sample_yaml):
-        # Reset channel mapping because they are being modified (currently)
-        # TODO remove this once channels core plugin exists
-        test_yaml = sample_yaml.copy()
-        test_yaml['networks']['sample_network']['channels'] = {}
-        test_yaml['networks']['second_network']['channels'] = {}
+    @pytest.fixture
+    def sample_yaml(self, load):
+        return load('''\
+            nick: TestBot
+            realname: Sample Bot
 
+            logging:
+              level: INFO
+
+            encoding: utf-16
+
+            networks:
+              sample_network:
+                user: Shanghai
+                fallback_encoding: cp1252
+                servers:
+                  - host: irc.example.org
+                    ssl: true
+                  - irc.example.org:6667
+                # TODO readd this once channels core plugin exists and it's not modified anymore
+                #channels:
+                #  foochannel:
+                #  barchannel: null
+                #  otherchannel:
+                #    key: some_key
+                #  '##foobar':
+
+              second_network:
+                nick: NickOverride
+                user: Shanghai2
+                servers:
+                  - host: irc.foobar.net
+                    ssl: true
+        ''')
+
+    def test_init(self, sample_yaml):
+        config = ShanghaiConfiguration(sample_yaml)
+        assert config['logging.level'] == 'INFO'
+
+    def test_parse_networks(self, sample_yaml):
+        config = ShanghaiConfiguration(sample_yaml)
+        networks = config.networks
+        assert len(networks) == 2
+        assert isinstance(networks[0], NetworkConfiguration)
+
+        netw_map = {netw.name: netw for netw in networks}
+        assert netw_map['sample_network']['nick'] == "TestBot"
+        assert netw_map['sample_network']['user'] == "Shanghai"
+        assert netw_map['sample_network']['encoding'] == "utf-16"
+
+        assert netw_map['second_network']['nick'] == "NickOverride"
+        assert netw_map['second_network']['user'] == "Shanghai2"
+
+        del sample_yaml['networks']
+        with pytest.raises(ConfigurationError) as excinfo:
+            ShanghaiConfiguration(sample_yaml)
+        excinfo.match("No networks found")
+
+    def test_fileloading(self, sample_yaml):
         # Cannot use tempfile.NamedTemporaryFile because of Windows's file locks
         fd, fname = tempfile.mkstemp('w')
         try:
             with open(fd, 'w', encoding='utf-8') as f:
-                ryaml.dump(test_yaml, f)
+                ryaml.dump(sample_yaml, f)
             config = ShanghaiConfiguration.from_filename(fname)
         finally:
             os.remove(fname)
 
-        assert config.mapping == test_yaml
-
-    @pytest.mark.skip("TODO")
-    def test_network_attr(self, sample_yaml, broken_conf_1, broken_conf_2):
-        c = Configuration(self.sample_yaml)
-        for network in c.networks:
-            self.assertIn(network['name'], ('sample_network',
-                                            'second_network'))
-
-        c = Configuration(self.broken_conf_1)
-        self.assertRaisesRegex(
-            ConfigurationError,
-            re.compile(r'is missing the following options'),
-            list, c.networks)
-
-        c = Configuration(self.broken_conf_2)
-        self.assertRaisesRegex(
-            ConfigurationError,
-            re.compile(r'has no server'),
-            list, c.networks)
+        assert config.mapping == sample_yaml

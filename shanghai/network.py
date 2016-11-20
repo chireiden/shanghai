@@ -191,7 +191,7 @@ async def on_msg_welcome(network, message):
     network.send_cmd('MODE', network.nickname, '+B')
 
     # join channels
-    for channel, chanconf in network.config['channels'].items():
+    for channel, chanconf in network.config.get('channels', {}).items():
         key = chanconf.get('key', None)
         if key is not None:
             network.send_cmd('JOIN', channel, key)
