@@ -9,7 +9,7 @@ import colorama
 
 from . import Shanghai
 from .config import ShanghaiConfiguration
-from .logging import set_default_logger, get_logger, set_logging_config, LogLevels
+from .logging import set_default_logger, get_logger, LogLevels
 
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
@@ -78,10 +78,8 @@ def main():
     colorama.init()
 
     config = ShanghaiConfiguration.from_filename('shanghai.yaml')
-    set_logging_config({key: config[key] for key in ('logging', 'timezone')
-                       if key in config})
 
-    default_logger = get_logger('main', 'main', open_msg=True)
+    default_logger = get_logger('main', 'main', config, open_msg=True)
     set_default_logger(default_logger)
 
     try:

@@ -12,7 +12,6 @@ import pytz
 
 from .config import Configuration
 
-_LOGGING_CONFIG = {}
 _default_logger = None
 
 
@@ -26,11 +25,6 @@ class LogLevels(int, Enum):
     NOTSET = logging.NOTSET
 
 logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
-
-
-def set_logging_config(config):
-    global _LOGGING_CONFIG
-    _LOGGING_CONFIG = config
 
 
 def _print_like(func):
@@ -152,7 +146,7 @@ def get_logger(context, name, config=None, open_msg=False):
           e.g. 'freenode' in context 'network'
     """
     if config is None:
-        config = Configuration(_LOGGING_CONFIG)
+        config = Configuration({})
 
     logging.setLoggerClass(Logger)
     # use a hashed version to avoid it containing dots.

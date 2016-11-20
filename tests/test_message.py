@@ -1,7 +1,8 @@
 
 from unittest import TestCase
+from shanghai.config import Configuration
 from shanghai.irc import Prefix, Message, ServerReply
-from shanghai.logging import get_logger, set_logging_config, set_default_logger
+from shanghai.logging import get_logger, set_default_logger
 
 
 class TestPrefix(TestCase):
@@ -36,12 +37,12 @@ class TestPrefix(TestCase):
 class TestMessage(TestCase):
 
     def setUp(self):
-        set_logging_config({
+        config = Configuration({
             'logging': {
                 'disable': True
             }
         })
-        self.logger = get_logger('test', 'test')
+        self.logger = get_logger('test', 'test', config)
         set_default_logger(self.logger)
 
     def test_privmsg(self):
