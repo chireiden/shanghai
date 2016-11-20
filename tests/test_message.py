@@ -37,8 +37,9 @@ class TestMessage(TestCase):
 
     def setUp(self):
         set_logging_config({
-            'disable-logging': True,
-            'disable-logging-output': True,
+            'logging': {
+                'disable': True
+            }
         })
         self.logger = get_logger('test', 'test')
         set_default_logger(self.logger)

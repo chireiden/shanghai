@@ -17,8 +17,8 @@ timezone: CET
 # These are the default settings.
 logging:
   level: INFO
-  to_console: True
-  to_file: True
+  disable: False
+  disable_stdout: False
 
 
 

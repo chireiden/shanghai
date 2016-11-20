@@ -178,12 +178,10 @@ def get_logger(context, name, config=None, open_msg=False):
     now = datetime.now(tz=timezone)
     name_attributes = dict(context=context, name=name, date=now)
 
-    disable_logging = config.get('disable-logging', False)
-    disable_logging_output = config.get('disable-logging-output', False)
     level = config.get('logging.level', 'INFO')
     logger.setLevel(LogLevels[level])
 
-    if not disable_logging:
+    if not config.get('logging.disable', False):
         file_formatter = Formatter(context, name, tz=timezone)
         # TODO use rotating file handler
         file_handler = FileHandler(
@@ -197,7 +195,7 @@ def get_logger(context, name, config=None, open_msg=False):
             logger.info('*' * 50)
             logger.info('Opened log.')
 
-    if not disable_logging_output:
+    if not config.get('disable.disable_stdout', False):
         terminal_formatter = Formatter(context, name, tz=timezone, terminal=True)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(terminal_formatter)
