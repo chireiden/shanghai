@@ -61,7 +61,8 @@ class Configuration:
         for i, leaf in enumerate(leafs):
             if not isinstance(node, c_abc.Mapping):
                 raise KeyError("Element '{}' is not a mapping".format(".".join(leafs[:i])))
-            assert leaf
+            if not leaf:
+                raise KeyError("Empty sub-key after '{}'".format(".".join(leafs[:i])))
             if leaf not in node:
                 break
             node = node[leaf]

@@ -9,7 +9,7 @@ from ruamel import yaml as ryaml
 
 from shanghai.config import (
     Server, Configuration, ConfigurationError, ShanghaiConfiguration,
-    # NetworkConfiguration, FallbackConfiguration
+    FallbackConfiguration, # NetworkConfiguration,
 )
 
 SAMPLE_YAML = '''\
@@ -124,19 +124,24 @@ class TestServer:
 
 class TestConfig:
 
-    fake_yaml = {
-        'foo': 123,
-        'bar': {
-            'foo': 'baz',
-            'bar': None,
-        },
-    }
+    @pytest.fixture(scope='class')
+    def fake_yaml(self):
+        return {
+            'foo': 123,
+            'bar': {
+                'foo': "baz",
+                'bar': None,
+            },
+            'ellipsis': ...,
+        }
 
-    def test_get(self):
-        c = Configuration(self.fake_yaml)
+    @pytest.fixture(scope='class')
+    def c(self, fake_yaml):
+        return Configuration(fake_yaml)
 
+    def test_get(self, c, fake_yaml):
         assert c.get('foo', 456) == 123
-        assert c.get('bar') == self.fake_yaml['bar']
+        assert c.get('bar') == fake_yaml['bar']
         assert c.get('bar.foo') == "baz"
         assert c.get('bar.bar', 123) is None
 
@@ -151,14 +156,22 @@ class TestConfig:
         excinfo.match("Element ['\"]foo['\"] is not a mapping")
 
         with pytest.raises(KeyError) as excinfo:
-            c.get('foo.baz.bar')
-        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+            c.get('bar..baz')
+        excinfo.match("Empty sub-key after ['\"]bar['\"]")
 
-    def test_getattr(self):
-        c = Configuration(self.fake_yaml)
+    def test_getitem(self, c, fake_yaml):
+        assert c['foo'] == 123
+        assert c['bar'] == fake_yaml['bar']
+        assert c['bar.foo'] == "baz"
+        assert c['bar.bar'] is None
+        assert c['ellipsis'] is ...
 
         with pytest.raises(KeyError) as excinfo:
             c['foo.baz']
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+
+        with pytest.raises(KeyError) as excinfo:
+            c['foo.baz.bar']
         excinfo.match("Element ['\"]foo['\"] is not a mapping")
 
         with pytest.raises(KeyError) as excinfo:
@@ -169,13 +182,89 @@ class TestConfig:
             c['bar.baz']
         excinfo.match("Cannot find ['\"]bar.baz['\"]")
 
-    def test_contains(self):
-        c = Configuration(self.fake_yaml)
+        with pytest.raises(KeyError) as excinfo:
+            c['bar..baz']
+        excinfo.match("Empty sub-key after ['\"]bar['\"]")
 
-        assert "foo" in c
-        assert "bar.foo" in c
-        assert "baz" not in c
-        assert "bar.baz" not in c
+    def test_contains(self, c):
+        assert 'foo' in c
+        assert 'bar.foo' in c
+        assert 'baz' not in c
+        assert 'bar.baz' not in c
+        assert 'ellipsis' in c
+
+
+class TestFallbackConfig:
+
+    @pytest.fixture(scope='class')
+    def fake_yaml(self):
+        return {
+            'foo': 456,
+            'ellipsis': ...,
+        }
+
+    @pytest.fixture(scope='class')
+    def fake_fallback_yaml(self):
+        return {
+            'foo': 123,
+            'bar': {
+                'foo': "baz",
+                'bar': None,
+            },
+        }
+
+    @pytest.fixture(scope='class')
+    def fb_c(self, fake_yaml, fake_fallback_yaml):
+        return FallbackConfiguration(fake_yaml, Configuration(fake_fallback_yaml))
+
+    def test_get(self, fb_c, fake_fallback_yaml):
+        assert fb_c.get('foo') == 456
+        assert fb_c.get('bar') == fake_fallback_yaml['bar']
+        assert fb_c.get('bar.foo') == 'baz'
+
+        assert fb_c.get('bar.baz') is None
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c.get('foo.baz')
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c.get('bar..baz')
+        excinfo.match("Empty sub-key after ['\"]bar['\"]")
+
+    def test_getitem(self, fb_c, fake_fallback_yaml):
+        assert fb_c['foo'] == 456
+        assert fb_c['bar'] == fake_fallback_yaml['bar']
+        assert fb_c['bar.foo'] == "baz"
+        assert fb_c['bar.bar'] is None
+        assert fb_c['ellipsis'] is ...
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c['foo.baz']
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c['bar.foo.bar']
+        excinfo.match("Element ['\"]bar.foo['\"] is not a mapping")
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c['baz']
+        excinfo.match("Cannot find ['\"]baz['\"]")
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c['bar.baz']
+        excinfo.match("Cannot find ['\"]bar.baz['\"]")
+
+        with pytest.raises(KeyError) as excinfo:
+            fb_c['bar..baz']
+        excinfo.match("Empty sub-key after ['\"]bar['\"]")
+
+    def test_contains(self, fb_c):
+        assert 'foo' in fb_c
+        assert 'bar.foo' in fb_c
+        assert 'baz' not in fb_c
+        assert 'bar.baz' not in fb_c
+        assert 'ellipsis' in fb_c
 
 
 class TestShanghaiConfig:
