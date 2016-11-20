@@ -3,7 +3,7 @@ from collections import namedtuple
 from typing import Dict, List
 
 from .server_reply import ServerReply
-from ..logging import current_logger
+from ..logging import get_default_logger
 
 
 _ESCAPE_SEQUENCES = {
@@ -107,8 +107,8 @@ class Message:
             try:
                 command = ServerReply(command)
             except ValueError:
-                current_logger.warning("unknown server reply code {}; {}"
-                                       .format(command, raw_line))
+                get_default_logger().warning("unknown server reply code {}; {}"
+                                             .format(command, raw_line))
 
         params = []
         if line:

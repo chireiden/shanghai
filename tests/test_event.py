@@ -106,11 +106,8 @@ class TestEventDispatchers(unittest.TestCase):
             'disable-logging': True,
             'disable-logging-output': True,
         }
-        self.log_context = logging.LogContext('test', 'test', config=config)
-        self.log_context.push()
-
-    def tearDown(self):
-        self.log_context.pop()
+        self.logger = logging.get_logger('test', 'test', config=config)
+        logging.set_default_logger(self.logger)
 
     def test_register(self):
         dispatcher = event.EventDispatcher()

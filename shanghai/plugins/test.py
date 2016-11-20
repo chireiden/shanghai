@@ -9,7 +9,7 @@ __plugin_description__ = 'bla blub'
 
 # just for testing
 @message_event('PRIVMSG')
-async def on_privmsg(network, message):
+async def on_privmsg(ctx, message):
     line = message.params[-1]
     words = line.split()
 
@@ -17,9 +17,9 @@ async def on_privmsg(network, message):
         raise Exception('Test Exception')
 
     elif words[0] == '!quit':
-        await network.request_close(line)
+        await ctx.network.request_close(line)
 
     elif words[0] == '!ctcp':
         if len(words) < 2:
             return
-        network.send_ctcp(message.prefix.name, words[1], ' '.join(words[2:]))
+        ctx.send_ctcp(message.prefix.name, words[1], ' '.join(words[2:]))
