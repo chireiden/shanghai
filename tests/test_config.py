@@ -75,6 +75,8 @@ class TestConfig:
         return Configuration(fake_yaml)
 
     def test_init(self):
+        assert Configuration()
+
         with pytest.raises(ValueError) as excinfo:
             Configuration([])
         excinfo.match("Must be a mapping")

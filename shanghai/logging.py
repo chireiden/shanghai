@@ -146,7 +146,7 @@ def get_logger(context, name, config=None, open_msg=False):
           e.g. 'freenode' in context 'network'
     """
     if config is None:
-        config = Configuration({})
+        config = Configuration()
 
     logging.setLoggerClass(Logger)
     # use a hashed version to avoid it containing dots.

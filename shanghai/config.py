@@ -40,7 +40,9 @@ class Configuration:
     equivalent to `d.get('logging', {}).get('enabled')`.
     """
 
-    def __init__(self, mapping):
+    def __init__(self, mapping=None):
+        if mapping is None:
+            mapping = {}
         if not isinstance(mapping, c_abc.Mapping):
             raise ValueError("Must be a mapping")
         self.mapping = mapping
