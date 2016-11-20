@@ -75,7 +75,7 @@ class Network(ShadowAttributesMixin):
             # We didn't stop, so try to reconnect after a timeout
             seconds = 10 * retry
             current_logger.info('Retry connecting in {} seconds'.format(seconds))
-            await asyncio.sleep(seconds)
+            await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
             self._reset()
 
     def _worker_done(self, task):
@@ -103,35 +103,12 @@ class Network(ShadowAttributesMixin):
             self._worker_task = asyncio.ensure_future(self._worker(restarted=True))
             self._worker_task.add_done_callback(self._worker_done)
 
-    async def _init_worker(self):
-        # First item on queue should be "connected", with the connection
-        # as its value
-        event = await self.event_queue.get()
-        if event.name == 'close_now':
-            current_logger.info('closing connection prematurely')
-            # Because we got "close_now" before "connected",
-            # a connection has likely not been established yet.
-            # So we cancel the task instead of closing the connection.
-            self._connection_task.cancel()
-            self.stopped = True
-            return
-        else:
-            assert event.name == "connected", event
-            assert self._connection == event.value, (event, self._connection)
-            await network_event_dispatcher.dispatch(self, event)
-
-    async def _worker(self, restarted=False):
+    async def _worker(self):
         """Dispatches events from the event queue."""
-
-        if not restarted:
-            await self._init_worker()
-
         while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
             current_logger.debug(event)
             await network_event_dispatcher.dispatch(self, event)
-
-        current_logger.debug('exiting worker task')
 
     def _close(self, quitmsg: str = None):
         current_logger.info("closing network")
@@ -185,6 +162,7 @@ async def on_raw_line(network, raw_line: bytes):
 
 @core_network_event(NetworkEventName.CONNECTED)
 async def on_connected(network, _):
+    network.connected = True
     current_logger.info("connected!")
 
 
@@ -195,8 +173,17 @@ async def on_disconnected(network, _):
 
 @core_network_event(NetworkEventName.CLOSE_REQUEST)
 async def on_close_request(network, quitmsg):
-    current_logger.info('closing connection')
-    network._close(quitmsg)
+    if network.connected:
+        current_logger.info('closing connection')
+        network._close(quitmsg)
+    else:
+        current_logger.info('closing connection prematurely')
+        # Because we got "close_now" before "connected",
+        # a connection has likely not been established yet.
+        # So we cancel the task instead of closing the connection.
+        if not network._connection_task.done():
+            network._connection_task.cancel()
+        network.stopped = True
 
 
 @core_message_event(ServerReply.RPL_WELCOME)
