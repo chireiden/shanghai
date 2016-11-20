@@ -45,7 +45,9 @@ class Connection:
                 if line:
                     await self.queue.put(NetworkEvent('raw_line', line))
         except asyncio.CancelledError:
-            current_logger.info("Connection.run cancelled")
+            current_logger.info("Connection.run was cancelled")
+        except ConnectionResetError as e:
+            current_logger.warning("connection was reset; {}".format(e))
         finally:
             self.close()
             await self.queue.put(NetworkEvent('disconnected', None))
