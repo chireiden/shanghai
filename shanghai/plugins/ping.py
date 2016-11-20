@@ -65,6 +65,7 @@ async def on_welcome(network, _):
         pong.unregister()
         on_disconnected.unregister()
 
+        network.remove_attribute('latency')
         pong_waiter_task.cancel()
         pinger_task.cancel()
         done, pending = await asyncio.wait([pinger_task, pong_waiter_task])
