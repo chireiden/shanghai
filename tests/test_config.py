@@ -3,31 +3,33 @@ import io
 import os
 import re
 import tempfile
-from unittest import TestCase
 
+import pytest
 from ruamel import yaml as ryaml
 
-from shanghai.config import Configuration, NamedConfig, ConfigurationError
+from shanghai.config import (
+    Server, Configuration, ConfigurationError, ShanghaiConfiguration,
+    # NetworkConfiguration, FallbackConfiguration
+)
 
 SAMPLE_YAML = '''\
+nick: TestBot
+user: Shanghai
+realname: Sample Bot
+
 # set global logging level
 logging:
   level: INFO
 
 networks:
-  GLOBAL:
-    nick: TestBot
-    user: Shanghai
-    realname: Sample Bot
-
   sample_network:
     encoding: utf-8
     fallback_encoding: latin1
     name: SampleNetwork
     servers:
-      irc.example.org:
-        port: 6697
+      - host: irc.example.org
         ssl: true
+      - irc.example.org:6667
     channels:
       foochannel:
       barchannel: null
@@ -43,14 +45,9 @@ networks:
 '''
 
 BROKEN_CONF_1 = '''\
-# set global logging level
-logging:
-  level: INFO
+foo: bar
 
 networks:
-  GLOBAL:
-    foo: bar
-
   sample_network:
     encoding: utf-8
     fallback_encoding: latin1
@@ -60,16 +57,11 @@ networks:
 '''
 
 BROKEN_CONF_2 = '''\
-# set global logging level
-logging:
-  level: INFO
+nick: TestBot
+user: testuser
+realname: Test Name
 
 networks:
-  GLOBAL:
-    nick: TestBot
-    user: testuser
-    realname: Test Name
-
   sample_network:
     encoding: utf-8
     fallback_encoding: latin1
@@ -77,70 +69,137 @@ networks:
 '''
 
 
-class TestConfig(TestCase):
+@pytest.fixture(scope='module')
+def sample_yaml():
+    return ryaml.safe_load(io.StringIO(SAMPLE_YAML))
 
-    def setUp(self):
-        self.fake_yaml = {
-            'foo': 123,
-            'bar': 'baz',
-        }
-        self.sample_yaml = ryaml.safe_load(io.StringIO(SAMPLE_YAML))
-        self.broken_conf_1 = ryaml.safe_load(io.StringIO(BROKEN_CONF_1))
-        self.broken_conf_2 = ryaml.safe_load(io.StringIO(BROKEN_CONF_2))
 
-    def test_namedconfig(self):
-        nc = NamedConfig('MyConf', foo=123, bar='spam')
-        self.assertIn(repr(nc), [
-            'MyConf(foo=123, bar=\'spam\')',
-            'MyConf(bar=\'spam\', foo=123)',
-            'MyConf(foo=123, bar="spam")',
-            'MyConf(bar="spam", foo=123)',
-        ])
+@pytest.fixture(scope='module')
+def broken_conf_1():
+    return ryaml.safe_load(io.StringIO(BROKEN_CONF_1))
 
-    def test_config(self):
+
+@pytest.fixture(scope='module')
+def broken_conf_2():
+    return ryaml.safe_load(io.StringIO(BROKEN_CONF_2))
+
+
+class TestServer:
+
+    def test_defaults(self):
+        server = Server("host")
+        assert server.host == "host"
+        assert server.port == 6667
+        assert server.ssl is False
+
+        server = Server("host", ssl=True)
+        assert server.host == "host"
+        assert server.port == 6697
+        assert server.ssl is True
+
+    def test_from_string(self):
+        server = Server.from_string("my_host:999")
+        assert server.host == "my_host"
+        assert server.port == 999
+        assert server.ssl is False
+
+        server = Server.from_string("my_host:+123")
+        assert server.host == "my_host"
+        assert server.port == 123
+        assert server.ssl is True
+
+    @pytest.mark.parametrize(
+        "source,expected",
+        [
+            ("my_host:123", "my_host:123"),
+            ("my_host:+123", "my_host:+123"),
+            ("my_host:", "my_host:6667"),
+            ("my_host:+", "my_host:+6697"),
+        ]
+    )
+    def test_str(self, source, expected):
+        server = Server.from_string(source)
+        assert str(server) == expected
+
+
+class TestConfig:
+
+    fake_yaml = {
+        'foo': 123,
+        'bar': {
+            'foo': 'baz',
+            'bar': None,
+        },
+    }
+
+    def test_get(self):
         c = Configuration(self.fake_yaml)
 
-        value = c.get('foo', 456)
-        self.assertEqual(value, 123)
+        assert c.get('foo', 456) == 123
+        assert c.get('bar') == self.fake_yaml['bar']
+        assert c.get('bar.foo') == "baz"
+        assert c.get('bar.bar', 123) is None
 
-        self.assertEqual(c.foo, 123)
-        self.assertEqual(c.bar, 'baz')
+        assert c.get('baz') is None
+        assert c.get('baz', 123) == 123
+        assert c.get('baz', 123) == 123
+        assert c.get('bar.baz', 234) == 234
+        assert c.get('baz.baz', 234) == 234
 
-        self.assertSequenceEqual(
-            sorted(c.items()),
-            sorted(self.fake_yaml.items())
-        )
+        with pytest.raises(KeyError) as excinfo:
+            c.get('foo.baz')
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
 
-    def test_fileloading(self):
+        with pytest.raises(KeyError) as excinfo:
+            c.get('foo.baz.bar')
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+
+    def test_getattr(self):
+        c = Configuration(self.fake_yaml)
+
+        with pytest.raises(KeyError) as excinfo:
+            c['foo.baz']
+        excinfo.match("Element ['\"]foo['\"] is not a mapping")
+
+        with pytest.raises(KeyError) as excinfo:
+            c['baz']
+        excinfo.match("Cannot find ['\"]baz['\"]")
+
+        with pytest.raises(KeyError) as excinfo:
+            c['bar.baz']
+        excinfo.match("Cannot find ['\"]bar.baz['\"]")
+
+    def test_contains(self):
+        c = Configuration(self.fake_yaml)
+
+        assert "foo" in c
+        assert "bar.foo" in c
+        assert "baz" not in c
+        assert "bar.baz" not in c
+
+
+class TestShanghaiConfig:
+
+    def test_fileloading(self, sample_yaml):
+        # Reset channel mapping because they are being modified (currently)
+        # TODO remove this once channels core plugin exists
+        test_yaml = sample_yaml.copy()
+        test_yaml['networks']['sample_network']['channels'] = {}
+        test_yaml['networks']['second_network']['channels'] = {}
+
         # Cannot use tempfile.NamedTemporaryFile because of Windows's file locks
         fd, fname = tempfile.mkstemp('w')
         try:
             with open(fd, 'w', encoding='utf-8') as f:
-                ryaml.dump(self.fake_yaml, f)
-            c = Configuration.from_filename(fname)
+                ryaml.dump(test_yaml, f)
+            config = ShanghaiConfiguration.from_filename(fname)
         finally:
             os.remove(fname)
 
-        self.assertDictEqual(
-            c._yaml,
-            self.fake_yaml
-        )
+        assert config.mapping == test_yaml
 
-    def test_clone_with_merge(self):
-        # could probably be more thorough
-        new_dict = Configuration.clone_with_merge(
-            self.fake_yaml, {'spam': {'spaz': 'blah'}}
-        )
-        self.assertDictEqual(
-            new_dict,
-            {
-                'foo': 123,
-                'bar': 'baz',
-                'spam': {'spaz': 'blah'},
-            }
-        )
-
-    def test_network_attr(self):
+    @pytest.mark.skip("TODO")
+    def test_network_attr(self, sample_yaml, broken_conf_1, broken_conf_2):
         c = Configuration(self.sample_yaml)
         for network in c.networks:
             self.assertIn(network['name'], ('sample_network',
