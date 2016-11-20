@@ -22,10 +22,9 @@ class Shanghai:
 
     def init_networks(self):
         for netconf in self.config.networks:
-            name = netconf['name']
-            network = Network(name, netconf['config'], loop=self.loop)
+            network = Network(netconf, loop=self.loop)
             network_task = asyncio.ensure_future(network.run(), loop=self.loop)
-            self.networks[name] = dict(
+            self.networks[netconf.name] = dict(
                 task=network_task,
                 network=network,
             )

@@ -1,21 +1,17 @@
 
 import asyncio
 
+from .config import Server
 from .event import NetworkEvent
 from .logging import current_logger
 
 
 class Connection:
 
-    def __init__(self, host: str, port: int, queue: asyncio.Queue,
-                 ssl: bool = False, loop: asyncio.AbstractEventLoop = None):
-        self.host = host
-        self.port = port
+    def __init__(self, server: Server, queue, loop: asyncio.AbstractEventLoop = None):
+        self.server = server
         self.queue = queue
-        self.ssl = ssl
         self.loop = loop
-        if self.loop is None:
-            self.loop = asyncio.get_event_loop()
 
         self.writer = None  # type: asyncio.StreamWriter
 
@@ -29,10 +25,10 @@ class Connection:
         self.writer.close()
 
     async def run(self):
-        current_logger.info("connecting to {s.host}:{ssl}{s.port}..."
-                            .format(s=self, ssl="+" if self.ssl else ""))
+        current_logger.info("connecting to {}...".format(self.server))
         reader, writer = await asyncio.open_connection(
-            self.host, self.port, ssl=self.ssl, loop=self.loop)
+            self.server.host, self.server.port, ssl=self.server.ssl, loop=self.loop
+        )
         self.writer = writer
 
         await self.queue.put(NetworkEvent('connected', self))

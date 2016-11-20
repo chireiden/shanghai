@@ -17,10 +17,10 @@ from .util import ShadowAttributesMixin
 class Network(ShadowAttributesMixin):
     """Sample Network class"""
 
-    def __init__(self, name, config, loop=None):
+    def __init__(self, config, loop=None):
         super().__init__()
 
-        self.name = name
+        self.name = config.name
         self.config = config
         self.loop = loop
 
@@ -29,7 +29,7 @@ class Network(ShadowAttributesMixin):
 
         self.event_queue = None
 
-        self._server_iter = itertools.cycle(self.config['servers'])
+        self._server_iter = itertools.cycle(self.config.servers)
         self._connection = None
         self._worker_task_failure_timestamps = []
 
@@ -46,17 +46,17 @@ class Network(ShadowAttributesMixin):
         self._connection_task = None
         self._worker_task = None
         self.stopped = False
+        self.connected = False
 
         server = next(self._server_iter)
         self.event_queue = asyncio.Queue()
-        self._connection = Connection(server.host, server.port, self.event_queue, server.ssl)
+        self._connection = Connection(server, self.event_queue, self.loop)
 
     def _make_log_context(self, *args, **kwargs):
-        return LogContext('network', self.name, self.config)
+        return LogContext('network', self.name, {})
 
     @with_log_context(_make_log_context)
     async def run(self):
-
         for retry in itertools.count(1):
             self._connection_task = asyncio.ensure_future(self._connection.run())
             self._worker_task = asyncio.ensure_future(self._worker())
