@@ -100,7 +100,7 @@ class Network(ShadowAttributesMixin):
                     return
 
             current_logger.warning("Restarting worker task")
-            self._worker_task = asyncio.ensure_future(self._worker(restarted=True))
+            self._worker_task = asyncio.ensure_future(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
 
     async def _worker(self):
