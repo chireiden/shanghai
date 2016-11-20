@@ -7,8 +7,8 @@ import sys
 
 import colorama
 
-from .core import Shanghai
-from .config import Configuration
+from . import Shanghai
+from .config import ShanghaiConfiguration
 from .logging import set_default_logger, get_logger, set_logging_config, LogLevels
 
 
@@ -77,9 +77,9 @@ async def stdin_reader(loop, input_handler):
 def main():
     colorama.init()
 
-    config = Configuration.from_filename('shanghai.yaml')
-    set_logging_config({key: value for key, value in config.items() if
-                        key in ('logging', 'timezone')})
+    config = ShanghaiConfiguration.from_filename('shanghai.yaml')
+    set_logging_config({key: config[key] for key in ('logging', 'timezone')
+                       if key in config})
 
     default_logger = get_logger('main', 'main', open_msg=True)
     set_default_logger(default_logger)

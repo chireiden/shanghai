@@ -10,6 +10,8 @@ import os
 import colorama
 import pytz
 
+from .config import Configuration
+
 _LOGGING_CONFIG = {}
 _default_logger = None
 
@@ -149,7 +151,8 @@ def get_logger(context, name, config=None, open_msg=False):
     name: some preferably unique name inside of context
           e.g. 'freenode' in context 'network'
     """
-    config = _LOGGING_CONFIG if config is None else config
+    if config is None:
+        config = Configuration(_LOGGING_CONFIG)
 
     logging.setLoggerClass(Logger)
     # use a hashed version to avoid it containing dots.
@@ -158,8 +161,6 @@ def get_logger(context, name, config=None, open_msg=False):
 
     # TODO cache timezone
     tzname = os.environ.get('TZ', None)
-
-    config = {**_LOGGING_CONFIG, **config}
 
     if tzname is None:
         tzname = config.get('timezone', None)
@@ -179,7 +180,7 @@ def get_logger(context, name, config=None, open_msg=False):
 
     disable_logging = config.get('disable-logging', False)
     disable_logging_output = config.get('disable-logging-output', False)
-    level = config.get('logging', {}).get('level', 'INFO')
+    level = config.get('logging.level', 'INFO')
     logger.setLevel(LogLevels[level])
 
     if not disable_logging:

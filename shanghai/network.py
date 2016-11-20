@@ -17,18 +17,18 @@ from .context import Context
 class Network:
     """Sample Network class"""
 
-    def __init__(self, name, config, loop=None):
-        self.logger = get_logger('network', name, config)
-        self.name = name
+    def __init__(self, config, loop=None):
+        self.name = config.name
         self.config = config
         self.loop = loop
+        self.logger = get_logger('network', self.name, config)
 
         self.encoding = self.config.get('encoding', 'utf-8')
         self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
 
         self.event_queue = None
 
-        self._server_iter = itertools.cycle(self.config['servers'])
+        self._server_iter = itertools.cycle(self.config.servers)
         self._connection = None
         self._worker_task_failure_timestamps = []
 
@@ -45,14 +45,13 @@ class Network:
         self._connection_task = None
         self._worker_task = None
         self.stopped = False
+        self.connected = False
 
         server = next(self._server_iter)
         self.event_queue = asyncio.Queue()
-        self._connection = Connection(server.host, server.port, self.event_queue, server.ssl,
-                                      logger=self.logger)
+        self._connection = Connection(server, self.event_queue, self.loop, logger=self.logger)
 
     async def run(self):
-
         for retry in itertools.count(1):
             self._connection_task = asyncio.ensure_future(self._connection.run())
             self._worker_task = asyncio.ensure_future(self._worker())
@@ -75,7 +74,7 @@ class Network:
             # We didn't stop, so try to reconnect after a timeout
             seconds = 10 * retry
             self.logger.info('Retry connecting in {} seconds'.format(seconds))
-            await asyncio.sleep(seconds)
+            await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
             self._reset()
 
     def _worker_done(self, task):
@@ -100,38 +99,15 @@ class Network:
                     return
 
             self.logger.warning("Restarting worker task")
-            self._worker_task = asyncio.ensure_future(self._worker(restarted=True))
+            self._worker_task = asyncio.ensure_future(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
 
-    async def _init_worker(self):
-        # First item on queue should be "connected", with the connection
-        # as its value
-        event = await self.event_queue.get()
-        if event.name == 'close_now':
-            self.logger.info('closing connection prematurely')
-            # Because we got "close_now" before "connected",
-            # a connection has likely not been established yet.
-            # So we cancel the task instead of closing the connection.
-            self._connection_task.cancel()
-            self.stopped = True
-            return
-        else:
-            assert event.name == "connected", event
-            assert self._connection == event.value, (event, self._connection)
-            await network_event_dispatcher.dispatch(self.context, event)
-
-    async def _worker(self, restarted=False):
+    async def _worker(self):
         """Dispatches events from the event queue."""
-
-        if not restarted:
-            await self._init_worker()
-
         while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
             self.logger.debug(event)
             await network_event_dispatcher.dispatch(self.context, event)
-
-        self.logger.debug('exiting worker task')
 
     def _close(self, quitmsg: str = None):
         self.logger.info("closing network")
@@ -159,10 +135,9 @@ class Network:
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('NOTICE', target, text)
 
-    async def request_close(self, quitmsg: str = None):
-        # TODO use Queue.put_nowait?
-        close_event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
-        await self.event_queue.put(close_event)
+    def request_close(self, quitmsg: str = None):
+        event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
+        self.event_queue.put_nowait(event)
 
 
 # Core event handlers #############################################################################
@@ -185,6 +160,7 @@ async def on_raw_line(ctx, raw_line: bytes):
 
 @core_network_event(NetworkEventName.CONNECTED)
 async def on_connected(ctx, _):
+    ctx.network.connected = True
     ctx.logger.info("connected!")
 
 
@@ -195,8 +171,17 @@ async def on_disconnected(ctx, _):
 
 @core_network_event(NetworkEventName.CLOSE_REQUEST)
 async def on_close_request(ctx, quitmsg):
-    ctx.logger.info('closing connection')
-    ctx.network._close(quitmsg)
+    if ctx.network.connected:
+        ctx.logger.info('closing connection')
+        ctx.network._close(quitmsg)
+    else:
+        ctx.logger.info('closing connection prematurely')
+        # Because we got "close_now" before "connected",
+        # a connection has likely not been established yet.
+        # So we cancel the task instead of closing the connection.
+        if not ctx.network._connection_task.done():
+            ctx.network._connection_task.cancel()
+        ctx.network.stopped = True
 
 
 @core_message_event(ServerReply.RPL_WELCOME)
@@ -205,7 +190,7 @@ async def on_msg_welcome(ctx, message):
     ctx.send_cmd('MODE', ctx.network.nickname, '+B')
 
     # join channels
-    for channel, chanconf in ctx.network.config['channels'].items():
+    for channel, chanconf in ctx.network.config.get('channels', {}).items():
         key = chanconf.get('key', None)
         if key is not None:
             ctx.send_cmd('JOIN', channel, key)
