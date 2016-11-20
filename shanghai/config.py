@@ -71,7 +71,8 @@ class Configuration:
         raise KeyError("Cannot find '{}'".format(key))
 
     def __contains__(self, key):
-        return self.get(key, ...) is not ...
+        obj = object()
+        return self.get(key, obj) is not obj
 
 
 class FallbackConfiguration(Configuration):
@@ -89,9 +90,10 @@ class FallbackConfiguration(Configuration):
             if not e.args[0].startswith("Cannot find"):
                 raise
 
+        obj = object()
         for config in self.fallback_configs:
-            value = config.get(key, ...)
-            if value is not ...:
+            value = config.get(key, obj)
+            if value is not obj:
                 return value
 
         raise KeyError("Cannot find '{}'".format(key))
