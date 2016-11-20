@@ -136,10 +136,9 @@ class Network(ShadowAttributesMixin):
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('NOTICE', target, text)
 
-    async def request_close(self, quitmsg: str = None):
-        # TODO use Queue.put_nowait?
-        close_event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
-        await self.event_queue.put(close_event)
+    def request_close(self, quitmsg: str = None):
+        event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
+        self.event_queue.put_nowait(event)
 
 
 # Core event handlers #############################################################################

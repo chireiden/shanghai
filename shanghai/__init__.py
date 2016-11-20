@@ -33,4 +33,4 @@ class Shanghai:
 
     def stop_networks(self):
         for network in self.networks.values():
-            asyncio.ensure_future(network['network'].request_close(), loop=self.loop)
+            network['network'].request_close()
