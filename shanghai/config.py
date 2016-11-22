@@ -21,7 +21,6 @@ class Server(SimpleNamespace):
     def from_string(cls, string):
         host, _, port = string.partition(":")
         _, ssl, port = port.rpartition("+")
-        print(host, port, ssl)
         port = int(port) if port else None
         ssl = bool(ssl)
         return cls(host, port, ssl)
