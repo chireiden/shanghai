@@ -80,11 +80,7 @@ class ShadowAttributesMixin:
     def __getattr__(self, name):
         if name in self._added_attributes:
             attr = self._added_attributes[name]
-            if name in self.added_methods:
-                # Wrap callable with `self` because it would be missing otherwise.
-                return functools.partial(attr, self)
-            else:
-                return attr
+            return attr
         elif name in self._added_cls_attributes:
             attr = self._added_cls_attributes[name]
             if name in self._added_cls_methods:
@@ -92,4 +88,5 @@ class ShadowAttributesMixin:
             else:
                 return attr
         else:
-            super().__getattr__(name)
+            raise AttributeError("{!r} has no attribute {!r}".format(self, name))
+        #     super().__getattr__(name)
