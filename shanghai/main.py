@@ -129,6 +129,13 @@ def main():
     else:
         default_logger.info("All network tasks terminated")
 
+    for task in network_tasks:
+        if task.done():
+            try:
+                task.result()  # cause exceptions to be raised
+            except:
+                default_logger.exception("Network task {!r} errored".format(task))
+
     if not stdin_reader_task.done():
         stdin_reader_task.cancel()
         try:
