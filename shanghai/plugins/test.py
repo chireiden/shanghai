@@ -19,6 +19,10 @@ async def on_privmsg(ctx, message):
     elif words[0] == '!quit':
         await ctx.network.request_close(line)
 
+    elif words[0] == '!cancel':
+        ctx.network._close()
+        ctx.network.stopped = False
+
     elif words[0] == '!ctcp':
         if len(words) < 2:
             return
