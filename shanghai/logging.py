@@ -189,7 +189,7 @@ def get_logger(context, name, config=None, open_msg=False):
             logger.info('*' * 50)
             logger.info('Opened log.')
 
-    if not config.get('disable.disable_stdout', False):
+    if not config.get('logging.disable_stdout', False):
         terminal_formatter = Formatter(context, name, tz=timezone, terminal=True)
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(terminal_formatter)
