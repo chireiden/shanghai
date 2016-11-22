@@ -5,7 +5,7 @@ import time
 
 from shanghai.event import NetworkEventName, core_network_event, core_message_event
 from shanghai.irc import ServerReply
-from shanghai.context import Context
+from shanghai.network import NetworkContext
 
 __plugin_name__ = 'PING PONG'
 __plugin_version__ = '0.1.0'
@@ -16,14 +16,14 @@ def ms_time() -> int:
     return int(time.time() * 1000)
 
 
-async def pinger(ctx: Context, ping_evt):
+async def pinger(ctx: NetworkContext, ping_evt):
     while True:
         ctx.send_cmd('PING', "LAG_{}".format(ms_time()))
         ping_evt.set()
         await asyncio.sleep(30)
 
 
-async def pong_waiter(ctx: Context, ping_evt, pong_evt):
+async def pong_waiter(ctx: NetworkContext, ping_evt, pong_evt):
     while True:
         await ping_evt.wait()
         ping_evt.clear()
@@ -38,13 +38,13 @@ async def pong_waiter(ctx: Context, ping_evt, pong_evt):
 
 
 @core_network_event(NetworkEventName.INIT_CONTEXT)
-async def init_context(ctx: Context, _):
+async def init_context(ctx: NetworkContext, _):
     ctx.logger.info('initializing context in "ping" plugin.', ctx)
     ctx.add_attribute('latency', 0)
 
 
 @core_message_event(ServerReply.RPL_WELCOME)
-async def on_welcome(ctx: Context, _):
+async def on_welcome(ctx: NetworkContext, _):
     ping_evt, pong_evt = asyncio.Event(), asyncio.Event()
 
     pong_waiter_task = asyncio.ensure_future(pong_waiter(ctx, ping_evt, pong_evt),
@@ -52,7 +52,7 @@ async def on_welcome(ctx: Context, _):
     pinger_task = asyncio.ensure_future(pinger(ctx, ping_evt), loop=ctx.network.loop)
 
     @core_message_event('PONG')
-    async def pong(ctx: Context, msg):
+    async def pong(ctx: NetworkContext, msg):
         text = msg.params[1]
         if not text.startswith("LAG_"):
             return
@@ -64,7 +64,7 @@ async def on_welcome(ctx: Context, _):
             ctx.logger.debug("latency: {:.3f}s".format(latency / 1000))
 
     @core_network_event(NetworkEventName.DISCONNECTED)
-    async def on_disconnected(ctx: Context, _):
+    async def on_disconnected(ctx: NetworkContext, _):
         ctx.logger.debug("Cleaning up ping plugin tasks")
         pong.unregister()
         on_disconnected.unregister()

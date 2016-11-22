@@ -10,8 +10,8 @@ from .event import (NetworkEvent, NetworkEventName,
                     network_event_dispatcher, message_event_dispatcher,
                     core_network_event, core_message_event)
 from .irc import Message, Options, ServerReply
-from .logging import get_logger
-from .context import Context
+from .logging import get_logger, Logger
+from .util import ShadowAttributesMixin
 
 
 class Network:
@@ -57,7 +57,7 @@ class Network:
             self._worker_task = asyncio.ensure_future(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
 
-            self.context = Context(self)
+            self.context = NetworkContext(self)
             await network_event_dispatcher.dispatch(
                 self.context, NetworkEvent(NetworkEventName.INIT_CONTEXT, None))
 
@@ -138,6 +138,28 @@ class Network:
     def request_close(self, quitmsg: str = None):
         event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         self.event_queue.put_nowait(event)
+
+
+class NetworkContext(ShadowAttributesMixin):
+
+    def __init__(self, network, *, logger: Logger=None):
+        super().__init__()
+        self.network = network
+        if logger is None:
+            logger = network.logger
+        self.logger = logger
+
+    def send_cmd(self, *args, **kwargs):
+        self.network.send_cmd(*args, **kwargs)
+
+    def send_line(self, *args, **kwargs):
+        self.network.send_line(*args, **kwargs)
+
+    def send_msg(self, *args, **kwargs):
+        self.network.send_msg(*args, **kwargs)
+
+    def send_notice(self, *args, **kwargs):
+        self.network.send_notice(*args, **kwargs)
 
 
 # Core event handlers #############################################################################

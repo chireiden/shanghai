@@ -6,7 +6,7 @@ from shanghai.event import (
     core_network_event, NetworkEventName
 )
 from shanghai.irc import Message
-from shanghai.context import Context
+from shanghai.network import NetworkContext
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.0.2'
@@ -38,14 +38,14 @@ class CtcpMessage(Message):
         return cls(ctcp_cmd, prefix=msg.prefix, params=ctcp_params)
 
 
-def send_ctcp(ctx: Context, target: str, command: str, text: str = None):
+def send_ctcp(ctx: NetworkContext, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
     text = '\x01{}{}\x01'.format(command, text)
     return ctx.send_msg(target, text)
 
 
-def send_ctcp_reply(ctx: Context, target: str, command: str, text: str = None):
+def send_ctcp_reply(ctx: NetworkContext, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
     text = '\x01{}{}\x01'.format(command, text)
@@ -53,9 +53,9 @@ def send_ctcp_reply(ctx: Context, target: str, command: str, text: str = None):
 
 
 @core_network_event(NetworkEventName.INIT_CONTEXT)
-async def init_context(ctx: Context, _):
-    Context.add_cls_method('send_ctcp', send_ctcp)
-    Context.add_cls_method('send_ctcp_reply', send_ctcp_reply)
+async def init_context(ctx: NetworkContext, _):
+    NetworkContext.add_cls_method('send_ctcp', send_ctcp)
+    NetworkContext.add_cls_method('send_ctcp_reply', send_ctcp_reply)
 
 
 # provide an event dispatcher for CTCP events
@@ -75,7 +75,7 @@ def ctcp_event(name, priority=Priority.DEFAULT):
 
 
 @core_message_event('PRIVMSG')
-async def privmsg(ctx: Context, msg: Message):
+async def privmsg(ctx: NetworkContext, msg: Message):
     ctcp_msg = CtcpMessage.from_message(msg)
     if ctcp_msg:
         await ctcp_event_dispatcher.dispatch(ctx, ctcp_msg)
@@ -83,6 +83,6 @@ async def privmsg(ctx: Context, msg: Message):
 
 # example ctcp_event hook
 @ctcp_event('VERSION')
-async def version_request(ctx: Context, msg: CtcpMessage):
+async def version_request(ctx: NetworkContext, msg: CtcpMessage):
     source = msg.prefix[0]
     ctx.send_ctcp_reply(source, 'VERSION', 'Shanghai v37')
