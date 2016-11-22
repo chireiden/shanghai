@@ -6,7 +6,7 @@ import pathlib
 import os
 import sys
 
-from .logging import current_logger
+from .logging import get_logger, get_default_logger
 
 
 class CyclicDependency(Exception):
@@ -16,18 +16,19 @@ class CyclicDependency(Exception):
 class Plugin:
 
     def __init__(self, info, module):
+        self.logger = get_logger('plugin', info['identifier'])
         self.info = info
         self.module = module
 
     def initialize(self):
         func_ref = getattr(self.module, 'initialize', None)
         if func_ref is None:
-            current_logger.debug('No Initialization for plugin', self)
+            self.logger.debug('No Initialization for plugin', self)
             return
         if not callable(func_ref):
-            current_logger.warn("'Initialize' is not callable in {!r}"
-                                .format(self.info['identifier']))
-        current_logger.debug('Initialize plugin', self)
+            self.logger.warn("'Initialize' is not callable in {!r}"
+                             .format(self.info['identifier']))
+        self.logger.debug('Initialize plugin', self)
         func_ref(self)
 
     def __repr__(self):
@@ -61,7 +62,7 @@ class PluginSystem:
             dependency_path = []
         if identifier in cls.plugin_registry:
             if not dependency_path:
-                current_logger.warn('Plugin', identifier, 'already exists.')
+                get_default_logger().warn('Plugin', identifier, 'already exists.')
             return cls.plugin_registry[identifier]
         for search_path in cls.PLUGIN_SEARCH_PATHS:
             try:
@@ -103,17 +104,18 @@ class PluginSystem:
             cls.load_plugin(dependency, dependency_path=dependency_path + [identifier])
 
         if dependency_path:
-            current_logger.info('Loading plugin', identifier, 'as dependency of', dependency_path)
+            get_default_logger().info('Loading plugin', identifier,
+                                      'as dependency of', dependency_path)
         else:
-            current_logger.info('Loading plugin', identifier)
+            get_default_logger().info('Loading plugin', identifier)
         spec = importlib.util.spec_from_file_location(identifier, str(path))
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        current_logger.info('Found plugin in', module.__file__)
+        get_default_logger().info('Found plugin in', module.__file__)
 
         plugin = cls.plugin_factory(info, module)
-        current_logger.info(plugin)
+        get_default_logger().info(plugin)
         return plugin
 
     @staticmethod

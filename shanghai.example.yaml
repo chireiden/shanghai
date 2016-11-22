@@ -1,39 +1,75 @@
+# Defaults for each network.
+nick: Shanghai
+user: cherry
+realname: Shanghai Margatroid
 
-# set global logging level
+# Specify encoding and fallback_encoding.
+# fallback_encoding is guaranteed to succeed and will replace unknown glyphs.
+# These are the default settings.
+encoding: utf-8
+fallback_encoding: latin1
+
+# Timezone setting, mostly for logging but can be used by plugins too.
+# Default is UTC.
+timezone: CET
+
+# Set global logging level.
+# These are the default settings.
 logging:
   level: INFO
+  disable: False
+  disable_stdout: False
 
+
+
+# Enable these plugins globally.
+# Any plugins found are enabled by default,
+# but you can use this to make Shanghai error out
+# if one of the enabled plugins isn't found.
+enable:
+  - urlinfo
+  - owner
+  - ignore
+
+# Disable plugins globally.
+disable:
+  - beer
+
+# Plugin-specific settings.
+# Can also be overridden for each network.
+plugins:
+  urlinfo:
+    timeout: 5
+    types:
+      - danbooru
+      - youtube
+      - matroska
+      - default
+
+  owner: Nitori
+
+  ignore:
+    - "*bot*!*@*"
+    - "*!*bot*@*"
+    - "*!*@*bot*"
+
+# Following is the network list, which is actually a dict.
 networks:
-  GLOBAL:
-    # serves as base for each network
-    # networks can overwrite any setting here.
-    nick: Shanghai
-    user: Shanghai
-    ident: cherry
-    realname: Shanghai Margatroid
-    owner: Nitori
-    enable:
-      - urlinfo
-      - fun
-    ignore:
-      - "*bot*!*@*"
-      - "*!*bot*@*"
-      - "*!*@*bot*"
-
   freenode:
     logging:
-      # set network wide logging level. if not specified global level is used.
+      # Override logging level for this network.
       level: DEBUG
-    # utf-8 + fallback latin1 is default anyway, but as example here.
-    encoding: utf-8
-    fallback_encoding: latin1
     servers:
-      irc.freenode.net:
+      # long form
+      - host: irc.freenode.net
         port: 6697
         ssl: true
+        # ignore_invalid_cert: true
+      - irc.freenode.net:+6697 # short form
     channels:
-      # if name does not start with one of #&+ the # symbol is implied.
-      # leave empty or use keyword null, if no options
+      # Mapping of channels to join.
+      # If name does not start with one of `#&+`, the `#` symbol is implied.
+      # Leave empty or use keyword null, if no options desired.
       botted:
       foochannel: null
       otherchannel:
@@ -44,18 +80,12 @@ networks:
 
   euirc:
     servers:
-      irc.euirc.net:
-        ssl: true  # default port 6697 on ssl?
-        ignore_invalid_cert: true
-        # or perhaps: accept_selfsigned_cert: true
+      - host: irc.euirc.net
+        ssl: true # also sets the port to 6697
+    # override default encoding settings
+    encoding: cp1252
+    fallback_encoding: cp1252
     channels:
       botted:
-
-plugins:
-  urlinfo:
-    timeout: 5s
-    types:
-      - danbooru
-      - youtube
-      - matroska
-      - default
+      enable:
+        - beer

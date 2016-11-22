@@ -31,10 +31,10 @@ class ShadowAttributesMixin:
     def set_attribute(self, name, value=None):
         """Allows for plugins to modify their added attributes to the network object."""
         if name not in self._added_attributes:
-            raise KeyError("Attribute '{}' is not defined; {}".format(name))
+            raise KeyError("Attribute '{}' is not defined".format(name))
         self._added_attributes[name] = value
 
-    def remove_attribute(self, name, value):
+    def remove_attribute(self, name):
         """Allows for plugins to remove their added attributes to the network object."""
         if name not in self._added_attributes:
             raise KeyError("Attribute '{}' is not defined".format(name))

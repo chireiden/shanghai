@@ -7,9 +7,9 @@ import sys
 
 import colorama
 
-from .core import Shanghai
-from .config import Configuration
-from .logging import current_logger, LogContext, set_logging_config, LogLevels
+from . import Shanghai
+from .config import ShanghaiConfiguration
+from .logging import set_default_logger, get_logger, LogLevels
 
 
 def exception_handler(loop, context):  # pylint: disable=unused-argument
@@ -26,8 +26,8 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
     else:
         print("Cannot print stack", file=f)
 
-    with LogContext("main", "exception_handler", open_msg=False):
-        current_logger.error(f.getvalue())
+    logger = get_logger("main", "exception_handler")
+    logger.error(f.getvalue())
 
 
 async def stdin_reader(loop, input_handler):
@@ -77,66 +77,73 @@ async def stdin_reader(loop, input_handler):
 def main():
     colorama.init()
 
-    config = Configuration.from_filename('shanghai.yaml')
-    set_logging_config({key: value for key, value in config.items() if
-                        key in ('logging', 'timezone')})
+    config = ShanghaiConfiguration.from_filename('shanghai.yaml')
 
-    with LogContext('main', 'main'):
-        try:
-            import uvloop
-        except ImportError:
-            current_logger.debug('Using default event loop.')
-        else:
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            current_logger.debug('Using uvloop event loop.')
+    default_logger = get_logger('main', 'main', config, open_msg=True)
+    set_default_logger(default_logger)
 
-        loop = asyncio.get_event_loop()
-        if current_logger.isEnabledFor(LogLevels.DEBUG):
-            loop.set_debug(True)
+    try:
+        import uvloop
+    except ImportError:
+        default_logger.debug('Using default event loop.')
+    else:
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        default_logger.debug('Using uvloop event loop.')
 
-        bot = Shanghai(config, loop)
-        network_tasks = list(bot.init_networks())
-        loop.set_exception_handler(exception_handler)
+    loop = asyncio.get_event_loop()
+    if default_logger.isEnabledFor(LogLevels.DEBUG):
+        loop.set_debug(True)
 
-        # For debugging purposes mainly
-        async def input_handler(line):
-            """Handle stdin input while running. Send lines to networks."""
-            split = line.split(None, 1)
-            if len(split) < 2:
+    bot = Shanghai(config, loop)
+    network_tasks = list(bot.init_networks())
+    loop.set_exception_handler(exception_handler)
+
+    # For debugging purposes mainly
+    async def input_handler(line):
+        """Handle stdin input while running. Send lines to networks."""
+        split = line.split(None, 1)
+        if len(split) < 2:
+            return
+        nw_name, irc_line = split
+        if nw_name and irc_line:
+            if nw_name not in bot.networks:
+                print("network '{}' not found".format(nw_name))
                 return
-            nw_name, irc_line = split
-            if nw_name and irc_line:
-                if nw_name not in bot.networks:
-                    print("network '{}' not found".format(nw_name))
-                    return
-                network = bot.networks[nw_name]['network']
-                network.send_line(irc_line)
+            network = bot.networks[nw_name]['network']
+            network.send_line(irc_line)
 
-        print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
-        stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))
+    print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
+    stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))
 
-        try:
-            loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
-        except KeyboardInterrupt:
-            current_logger.warn("cancelled by user")
-            # schedule close event
-            bot.stop_networks()
-            task = asyncio.wait(network_tasks, loop=loop, timeout=5)
-            done, pending = loop.run_until_complete(task)
-            if pending:
-                current_logger.error("The following tasks didn't terminate within the set "
-                                     "timeout: %s", pending)
-        else:
-            current_logger.info("All network tasks terminated")
+    try:
+        loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
+    except KeyboardInterrupt:
+        default_logger.warn("cancelled by user")
+        # schedule close event
+        bot.stop_networks()
+        task = asyncio.wait(network_tasks, loop=loop, timeout=5)
+        done, pending = loop.run_until_complete(task)
+        if pending:
+            default_logger.error("The following tasks didn't terminate within the set "
+                                 "timeout: %s", pending)
+    else:
+        default_logger.info("All network tasks terminated")
 
-        if not stdin_reader_task.done():
-            stdin_reader_task.cancel()
+    for task in network_tasks:
+        if task.done():
             try:
-                loop.run_until_complete(asyncio.wait_for(stdin_reader_task, 5, loop=loop))
-            except asyncio.CancelledError:
-                pass
-            except asyncio.TimeoutError:
-                current_logger.error("stdin_reader didn't terminate within the set timeout")
+                task.result()  # cause exceptions to be raised
+            except:
+                default_logger.exception("Network task {!r} errored".format(task))
 
-        loop.close()
-        current_logger.info('Closing now')
+    if not stdin_reader_task.done():
+        stdin_reader_task.cancel()
+        try:
+            loop.run_until_complete(asyncio.wait_for(stdin_reader_task, 5, loop=loop))
+        except asyncio.CancelledError:
+            pass
+        except asyncio.TimeoutError:
+            default_logger.error("stdin_reader didn't terminate within the set timeout")
+
+    loop.close()
+    default_logger.info('Closing now')

@@ -6,15 +6,13 @@ import hashlib
 import io
 import logging
 import os
-import typing as t
 
 import colorama
 import pytz
 
-from .local import LocalStack, LocalProxy
+from .config import Configuration
 
-
-_LOGGING_CONFIG = {}  # type: t.Dict[str, t.Any]
+_default_logger = None
 
 
 class LogLevels(int, Enum):
@@ -27,11 +25,6 @@ class LogLevels(int, Enum):
     NOTSET = logging.NOTSET
 
 logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
-
-
-def set_logging_config(config):
-    global _LOGGING_CONFIG
-    _LOGGING_CONFIG = config
 
 
 def _print_like(func):
@@ -136,112 +129,70 @@ class Formatter(logging.Formatter):
         return s
 
 
-class LogContext:
-
-    def __init__(self, context, name, config=None, open_msg=True):
-        self.context = context
-        self.name = name
-        self.config = _LOGGING_CONFIG if config is None else config
-
-        self.logger = self._get_logger(self.context, self.name, self.config, open_msg)
-
-    def __enter__(self):
-        self.push()
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.pop()
-
-    def push(self):
-        _logging_ctx_stack.push(self)
-
-    def pop(self):
-        if _logging_ctx_stack.top is self:
-            _logging_ctx_stack.pop()
-        else:
-            raise RuntimeError("Unexpected stack element; "
-                               "stack top is not self")
-
-    @staticmethod
-    def _get_logger(context, name, config, open_msg):
-        """
-        context: i.e. 'network', 'channel', 'core', whatvever.
-        name: some preferably unique name inside of context
-              e.g. 'freenode' in context 'network'
-        """
-        logging.setLoggerClass(Logger)
-        # use a hashed version to avoid it containing dots.
-        hashed_name = hashlib.sha256(name.lower().encode('utf-8')).hexdigest()[:12]
-        logger = logging.getLogger('{}.{}'.format(context.lower(), hashed_name))
-
-        # TODO cache timezone
-        tzname = os.environ.get('TZ', None)
-
-        config = {**_LOGGING_CONFIG, **config}
-
-        if tzname is None:
-            tzname = config.get('timezone', None)
-
-        if tzname is None:
-            tzfile = '/etc/timezone'
-            if os.path.exists(tzfile) and os.path.isfile(tzfile):
-                with open(tzfile, 'r') as f:
-                    tzname = f.read().strip()
-
-        if tzname is None:
-            tzname = 'UTC'
-
-        timezone = pytz.timezone(tzname)
-        now = datetime.now(tz=timezone)
-        name_attributes = dict(context=context, name=name, date=now)
-
-        disable_logging = config.get('disable-logging', False)
-        disable_logging_output = config.get('disable-logging-output', False)
-        level = config.get('logging', {}).get('level', 'INFO')
-        logger.setLevel(LogLevels[level])
-
-        if not disable_logging:
-            file_formatter = Formatter(context, name, tz=timezone)
-            # TODO use rotating file handler
-            file_handler = FileHandler(
-                'logs/{context}-{name}-{date:%Y-%m}.log'
-                .format(**name_attributes))
-            file_handler.setFormatter(file_formatter)
-            logger.addHandler(file_handler)
-
-            if open_msg:
-                # Realistically, we don't need this in a terminal
-                logger.info('*' * 50)
-                logger.info('Opened log.')
-
-        if not disable_logging_output:
-            terminal_formatter = Formatter(context, name, tz=timezone, terminal=True)
-            stream_handler = logging.StreamHandler()
-            stream_handler.setFormatter(terminal_formatter)
-            logger.addHandler(stream_handler)
-
-        return logger
+def set_default_logger(logger: Logger):
+    global _default_logger
+    _default_logger = logger
 
 
-def with_log_context(log_context_factory):
-
-    def real_deco(func):
-        @functools.wraps(func)
-        async def wrapper(*args, **kwargs):
-            log_context = log_context_factory(*args, **kwargs)
-            with log_context:
-                return await func(*args, **kwargs)
-
-        return wrapper
-
-    return real_deco
+def get_default_logger():
+    global _default_logger
+    return _default_logger
 
 
-def _get_current_logger():
-    top = _logging_ctx_stack.top
-    if top is None:
-        raise RuntimeError("Working outside logging context")
-    return top.logger
+def get_logger(context, name, config=None, open_msg=False):
+    """
+    context: i.e. 'network', 'channel', 'core', whatvever.
+    name: some preferably unique name inside of context
+          e.g. 'freenode' in context 'network'
+    """
+    if config is None:
+        config = Configuration()
 
+    logging.setLoggerClass(Logger)
+    # use a hashed version to avoid it containing dots.
+    hashed_name = hashlib.sha256(name.lower().encode('utf-8')).hexdigest()[:12]
+    logger = logging.getLogger('{}.{}'.format(context.lower(), hashed_name))
 
-_logging_ctx_stack = LocalStack()
-current_logger = t.cast(Logger, LocalProxy(_get_current_logger))
+    # TODO cache timezone
+    tzname = os.environ.get('TZ', None)
+
+    if tzname is None:
+        tzname = config.get('timezone', None)
+
+    if tzname is None:
+        tzfile = '/etc/timezone'
+        if os.path.exists(tzfile) and os.path.isfile(tzfile):
+            with open(tzfile, 'r') as f:
+                tzname = f.read().strip()
+
+    if tzname is None:
+        tzname = 'UTC'
+
+    timezone = pytz.timezone(tzname)
+    now = datetime.now(tz=timezone)
+    name_attributes = dict(context=context, name=name, date=now)
+
+    level = config.get('logging.level', 'INFO')
+    logger.setLevel(LogLevels[level])
+
+    if not config.get('logging.disable', False):
+        file_formatter = Formatter(context, name, tz=timezone)
+        # TODO use rotating file handler
+        file_handler = FileHandler(
+            'logs/{context}-{name}-{date:%Y-%m}.log'
+            .format(**name_attributes))
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+
+        if open_msg:
+            # Realistically, we don't need this in a terminal
+            logger.info('*' * 50)
+            logger.info('Opened log.')
+
+    if not config.get('logging.disable_stdout', False):
+        terminal_formatter = Formatter(context, name, tz=timezone, terminal=True)
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(terminal_formatter)
+        logger.addHandler(stream_handler)
+
+    return logger
