@@ -16,7 +16,10 @@ class NetworkEventName(str, enum.Enum):
     CLOSE_REQUEST = "close_request"
     MESSAGE = "message"
     RAW_LINE = "raw_line"
-    INIT_CONTEXT = "init_context"
+
+
+class GlobalEventName(str, enum.Enum):
+    INIT_NETWORK_CTX = "init_network_context"
 
 
 class Priority(int, enum.Enum):
@@ -73,6 +76,23 @@ class _PrioritizedSetList:
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
 
 
+class EventDecorator:
+
+    def __init__(self, dispatcher):
+        self.dispatcher = dispatcher
+
+    def __call__(self, name, priority=Priority.DEFAULT):
+        def deco(coroutine):
+            self.dispatcher.register(name, coroutine, priority)
+            coroutine.unregister = functools.partial(self.dispatcher.unregister, name, coroutine)
+            return coroutine
+
+        return deco
+
+    def core(self, name):
+        return self(name, Priority.CORE)
+
+
 class EventDispatcher:
 
     """Allows to register handlers and to dispatch events to said handlers, by priority."""
@@ -90,64 +110,72 @@ class EventDispatcher:
         self.event_map[name].add(priority, coroutine)
 
     async def dispatch(self, name: str, *args):
+        get_default_logger().ddebug("Dispatching event {!r} with arguments {}".format(name, args))
         if name not in self.event_map:
+            get_default_logger().ddebug("No event handlers for event {!r}".format(name))
             return
 
         for priority, handlers in self.event_map[name]:
-            get_default_logger().ddebug("Starting tasks for event '{}' with priority {}"
-                                        .format(name, priority))
+            get_default_logger().ddebug("Creating tasks for event {!r} (priority {}), from {}"
+                                        .format(name, priority, handlers))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
+
+            get_default_logger().ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
+                                        .format(name, priority, tasks))
             results = await asyncio.gather(*tasks)
-            get_default_logger().ddebug("Results from event event '{}' with priority {}: {}"
+
+            get_default_logger().ddebug("Results from event event {!r} (priority {}): {}"
                                         .format(name, priority, results))
             # TODO interpret results, handle exceptions
+
+    @property
+    def decorator(self):
+        return EventDecorator(self)
+
+    # decorator
+    # def decorator(self, name, priority=Priority.DEFAULT):
+    #     def deco(coroutine):
+    #         self.register(name, coroutine, priority)
+    #         coroutine.unregister = functools.partial(self.unregister, name, coroutine)
+    #         return coroutine
+
+    #     return deco
+
+
+class GlobalEventDispatcher(EventDispatcher):
+
+    @property
+    def decorator(self):
+        # if name not in GlobalEventName.__members__.values():
+        #     raise ValueError("Unknown global event name '{}'".format(name))
+        return super().decorator
 
 
 class NetworkEventDispatcher(EventDispatcher):
 
-    async def dispatch(self, ctx, event: NetworkEvent):
-        return await super().dispatch(event.name, ctx, event.value)
+    def __init__(self, context):
+        super().__init__()
+        self.context = context
+
+    async def dispatch(self, event: NetworkEvent):
+        return await super().dispatch(event.name, self.context, event.value)
+
+    @property
+    def decorator(self):
+        # if name not in NetworkEventName.__members__.values():
+        #     raise ValueError("Unknown network event name '{}'".format(name))
+        return super().decorator
 
 
 class MessageEventDispatcher(EventDispatcher):
 
-    async def dispatch(self, ctx, msg):
-        return await super().dispatch(msg.command, ctx, msg)
+    def __init__(self, context):
+        super().__init__()
+        self.context = context
+
+    async def dispatch(self, msg):
+        return await super().dispatch(msg.command, self.context, msg)
 
 
-class OutMessageEventDispatcher(MessageEventDispatcher):
-    pass
-
-
-network_event_dispatcher = NetworkEventDispatcher()
-message_event_dispatcher = MessageEventDispatcher()
-
-
-# decorator
-def network_event(name, priority=Priority.DEFAULT):
-    if name not in NetworkEventName.__members__.values():
-        raise ValueError("Unknown network event name '{}'".format(name))
-
-    dispatcher = network_event_dispatcher
-
-    def deco(coroutine):
-        dispatcher.register(name, coroutine, priority)
-        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
-        return coroutine
-
-    return deco
-
-
-# decorator
-def message_event(name, priority=Priority.DEFAULT):
-    dispatcher = message_event_dispatcher
-
-    def deco(coroutine):
-        dispatcher.register(name, coroutine, priority)
-        coroutine.unregister = functools.partial(dispatcher.unregister, name, coroutine)
-        return coroutine
-
-    return deco
-
-core_network_event = functools.partial(network_event, priority=Priority.CORE)
-core_message_event = functools.partial(message_event, priority=Priority.CORE)
+global_dispatcher = GlobalEventDispatcher()
+global_event = global_dispatcher.decorator

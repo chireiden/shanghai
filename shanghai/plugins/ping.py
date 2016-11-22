@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from shanghai.event import NetworkEventName, core_network_event, core_message_event
+from shanghai.event import NetworkEventName, GlobalEventName, global_event
 from shanghai.irc import ServerReply
 from shanghai.network import NetworkContext
 
@@ -37,48 +37,46 @@ async def pong_waiter(ctx: NetworkContext, ping_evt, pong_evt):
             pong_evt.clear()
 
 
-@core_network_event(NetworkEventName.INIT_CONTEXT)
-async def init_context(ctx: NetworkContext, _):
+@global_event.core(GlobalEventName.INIT_NETWORK_CTX)
+async def init_context(ctx: NetworkContext):
     ctx.logger.info('initializing context in "ping" plugin.', ctx)
     ctx.add_attribute('latency', 0)
 
+    @ctx.message_event.core(ServerReply.RPL_WELCOME)
+    async def on_welcome(ctx: NetworkContext, _):
+        ping_evt, pong_evt = asyncio.Event(), asyncio.Event()
 
-@core_message_event(ServerReply.RPL_WELCOME)
-async def on_welcome(ctx: NetworkContext, _):
-    ping_evt, pong_evt = asyncio.Event(), asyncio.Event()
+        pong_waiter_task = asyncio.ensure_future(pong_waiter(ctx, ping_evt, pong_evt),
+                                                 loop=ctx.network.loop)
+        pinger_task = asyncio.ensure_future(pinger(ctx, ping_evt), loop=ctx.network.loop)
 
-    pong_waiter_task = asyncio.ensure_future(pong_waiter(ctx, ping_evt, pong_evt),
-                                             loop=ctx.network.loop)
-    pinger_task = asyncio.ensure_future(pinger(ctx, ping_evt), loop=ctx.network.loop)
+        @ctx.message_event.core('PONG')
+        async def pong(ctx: NetworkContext, msg):
+            text = msg.params[1]
+            if not text.startswith("LAG_"):
+                return
+            else:
+                pong_evt.set()
+                ms = int(text[4:])
+                latency = ms_time() - ms
+                ctx.set_attribute('latency', latency)
+                ctx.logger.debug("latency: {:.3f}s".format(latency / 1000))
 
-    @core_message_event('PONG')
-    async def pong(ctx: NetworkContext, msg):
-        text = msg.params[1]
-        if not text.startswith("LAG_"):
-            return
-        else:
-            pong_evt.set()
-            ms = int(text[4:])
-            latency = ms_time() - ms
-            ctx.set_attribute('latency', latency)
-            ctx.logger.debug("latency: {:.3f}s".format(latency / 1000))
+        @ctx.network_event.core(NetworkEventName.DISCONNECTED)
+        async def on_disconnected(ctx: NetworkContext, _):
+            ctx.logger.debug("Cleaning up ping plugin tasks")
+            pong.unregister()
+            on_disconnected.unregister()
 
-    @core_network_event(NetworkEventName.DISCONNECTED)
-    async def on_disconnected(ctx: NetworkContext, _):
-        ctx.logger.debug("Cleaning up ping plugin tasks")
-        pong.unregister()
-        on_disconnected.unregister()
+            ctx.set_attribute('latency', 0)
+            pong_waiter_task.cancel()
+            pinger_task.cancel()
+            done, pending = await asyncio.wait([pinger_task, pong_waiter_task])
+            if pending:
+                ctx.logger.warning("pending", pending)
 
-        ctx.remove_attribute('latency')
-        pong_waiter_task.cancel()
-        pinger_task.cancel()
-        done, pending = await asyncio.wait([pinger_task, pong_waiter_task])
-        if pending:
-            ctx.logger.warning("pending", pending)
-
-
-# Realistically, we don't need this since we initiate the ping handshare ourselves,
-# but better safe then sorry.
-@core_message_event('PING')
-async def on_ping(ctx, message):
-    ctx.send_cmd('PONG', *message.params)
+    # Realistically, we don't need this since we initiate the ping handshare ourselves,
+    # but better safe then sorry.
+    @ctx.message_event.core('PING')
+    async def on_ping(ctx, message):
+        ctx.send_cmd('PONG', *message.params)
