@@ -165,15 +165,5 @@ class NetworkEventDispatcher(EventDispatcher):
         return await super().dispatch(event.name, self.context, event.value)
 
 
-class MessageEventDispatcher(EventDispatcher):
-
-    def __init__(self, context, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.context = context
-
-    async def dispatch(self, msg):
-        return await super().dispatch(msg.command, self.context, msg)
-
-
 global_dispatcher = GlobalEventDispatcher()
 global_event = global_dispatcher.decorator

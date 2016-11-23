@@ -8,8 +8,8 @@ import time
 from .connection import Connection
 from .event import (NetworkEvent, GlobalEventName, NetworkEventName,
                     global_dispatcher, global_event, Priority,
-                    NetworkEventDispatcher, MessageEventDispatcher)
-from .irc import Message, Options, ServerReply
+                    NetworkEventDispatcher)
+from .irc import Options, ServerReply
 from .logging import get_logger, Logger
 from .util import ShadowAttributesMixin
 

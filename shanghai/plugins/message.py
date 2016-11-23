@@ -2,13 +2,23 @@
 
 from shanghai.event import (
     GlobalEventName, NetworkEventName, Priority,
-    MessageEventDispatcher, global_event
+    EventDispatcher, global_event
 )
 from shanghai.irc import Message
 
 __plugin_name__ = 'Message'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = "Parses 'raw_line' network events and emits message events"
+
+
+class MessageEventDispatcher(EventDispatcher):
+
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.context = context
+
+    async def dispatch(self, msg):
+        return await super().dispatch(msg.command, self.context, msg)
 
 
 @global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.PRE_CORE)
