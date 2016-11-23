@@ -52,12 +52,12 @@ def send_ctcp_reply(ctx: NetworkContext, target: str, command: str, text: str = 
 
 @global_event.core(GlobalEventName.INIT_NETWORK_CTX)
 async def init_context(ctx: NetworkContext):
-    NetworkContext.add_cls_method('send_ctcp', send_ctcp)
-    NetworkContext.add_cls_method('send_ctcp_reply', send_ctcp_reply)
+    ctx.add_method(send_ctcp)
+    ctx.add_method(send_ctcp_reply)
 
     # provide an event dispatcher for CTCP events
     ctcp_event_dispatcher = MessageEventDispatcher(ctx)
-    ctx.add_cls_method('ctcp_event', ctcp_event_dispatcher.decorator)
+    ctx.add_method('ctcp_event', ctcp_event_dispatcher.decorator)
 
     # decorator
     @ctx.message_event.core('PRIVMSG')
