@@ -1,6 +1,5 @@
 
 import asyncio
-import unittest
 from unittest import mock
 
 import pytest
@@ -13,13 +12,13 @@ def loop():
     return asyncio.get_event_loop()
 
 
-class TestPriority(unittest.TestCase):
+class TestPriority:
 
     def test_core_gt_default(self):
         assert event.Priority.CORE > event.Priority.DEFAULT
 
 
-class TestNetworkEvent(unittest.TestCase):
+class TestNetworkEvent:
 
     def test_attributes(self):
         a, b = object(), object()
@@ -32,7 +31,7 @@ class TestNetworkEvent(unittest.TestCase):
         assert evt.value is None
 
 
-class TestPrioritizedSetList(unittest.TestCase):
+class TestPrioritizedSetList:
 
     def test_bool(self):
         prio_set_list = event._PrioritizedSetList()
@@ -71,11 +70,13 @@ class TestPrioritizedSetList(unittest.TestCase):
         obj = object()
         prio_set_list.add(0, obj)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.add(0, obj)
+        excinfo.match(r"has already been added")
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.add(1, obj)
+        excinfo.match(r"has already been added")
 
     def test_contains(self):
         prio_set_list = event._PrioritizedSetList()
@@ -102,8 +103,9 @@ class TestPrioritizedSetList(unittest.TestCase):
         prio_set_list.remove(obj)
         assert not prio_set_list
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.remove(obj)
+        excinfo.match(r"can not be found")
 
 
 class TestEventDispatchers:
