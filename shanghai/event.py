@@ -23,7 +23,9 @@ class GlobalEventName(str, enum.Enum):
 
 
 class Priority(int, enum.Enum):
+    PRE_CORE = 5
     CORE = 0
+    POST_CORE = -5
     DEFAULT = -10
 
 

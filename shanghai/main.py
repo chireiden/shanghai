@@ -110,7 +110,7 @@ def main():
                 print("network '{}' not found".format(nw_name))
                 return
             network = bot.networks[nw_name]['network']
-            network.send_line(irc_line)
+            network._context.send_line(irc_line)
 
     print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
     stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))

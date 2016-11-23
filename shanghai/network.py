@@ -23,9 +23,6 @@ class Network:
         self.loop = loop
         self.logger = get_logger('network', self.name, config)
 
-        self.encoding = self.config.get('encoding', 'utf-8')
-        self.fallback_encoding = self.config.get('fallback_encoding', 'latin1')
-
         self.event_queue = None
 
         self._server_iter = itertools.cycle(self.config.servers)
@@ -123,29 +120,11 @@ class Network:
 
     def _close(self, quitmsg: str = None):
         self.logger.info("closing network")
-        if quitmsg:
-            self.send_cmd('QUIT', quitmsg)
-        else:
-            self.send_cmd('QUIT')
         self._connection.close()
         self.stopped = True
 
-    def send_line(self, line: str):
-        self._connection.writeline(line.encode(self.encoding))
-
-    def send_cmd(self, command: str, *params: str):
-        args = [command, *params]
-        if ' ' in args[-1]:
-            args[-1] = ':{}'.format(args[-1])
-        self.send_line(' '.join(args))
-
-    def send_msg(self, target, text):
-        # TODO split messages that are too long into multiple, also newlines
-        self.send_cmd('PRIVMSG', target, text)
-
-    def send_notice(self, target, text):
-        # TODO split messages that are too long into multiple, also newlines
-        self.send_cmd('NOTICE', target, text)
+    def send_bytes(self, line: bytes):
+        self._connection.writeline(line)
 
     def request_close(self, quitmsg: str = None):
         event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
@@ -161,39 +140,15 @@ class NetworkContext(ShadowAttributesMixin):
             logger = network.logger
         self.logger = logger
 
-    def send_cmd(self, *args, **kwargs):
-        self.network.send_cmd(*args, **kwargs)
-
-    def send_line(self, *args, **kwargs):
-        self.network.send_line(*args, **kwargs)
-
-    def send_msg(self, *args, **kwargs):
-        self.network.send_msg(*args, **kwargs)
-
-    def send_notice(self, *args, **kwargs):
-        self.network.send_notice(*args, **kwargs)
+    def send_bytes(self, line: bytes):
+        self.network.send_bytes(line)
 
 
 # Core event handlers #############################################################################
 
-@global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.CORE + 1)
+@global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.CORE)
 async def init_context(ctx):
-    msg_evt_disp = MessageEventDispatcher(ctx)
-    ctx.add_attribute('message_event', msg_evt_disp.decorator)
-
-    @ctx.network_event.core(NetworkEventName.RAW_LINE)
-    async def on_raw_line(ctx, raw_line: bytes):
-        try:
-            line = raw_line.decode(ctx.network.encoding)
-        except UnicodeDecodeError:
-            line = raw_line.decode(ctx.network.fallback_encoding, 'replace')
-        try:
-            msg = Message.from_line(line)
-        except Exception as exc:
-            ctx.network.exception('-->', line)
-            raise exc
-
-        await msg_evt_disp.dispatch(msg)
+    ctx.logger.debug("running init_context in network.py")
 
     @ctx.network_event.core(NetworkEventName.CONNECTED)
     async def on_connected(ctx, _):
@@ -204,11 +159,11 @@ async def init_context(ctx):
     async def on_disconnected(ctx, _):
         ctx.logger.info('connection closed by peer!')
 
-    @ctx.network_event.core(NetworkEventName.CLOSE_REQUEST)
-    async def on_close_request(ctx, quitmsg):
+    @ctx.network_event(NetworkEventName.CLOSE_REQUEST, priority=Priority.POST_CORE)
+    async def on_close_request(ctx, _):
         if ctx.network.connected:
             ctx.logger.info('closing connection')
-            ctx.network._close(quitmsg)
+            ctx.network._close()
         else:
             ctx.logger.info('closing connection prematurely')
             # Because we got "close_now" before "connected",
