@@ -2,6 +2,8 @@
 import functools
 from typing import Union, Callable
 
+from fullqualname import fullqualname
+
 
 class ShadowAttributesMixin:
 
@@ -16,10 +18,6 @@ class ShadowAttributesMixin:
     When removing attributes,
     use `remove_attribute`.
     """
-
-    # classattributes
-    _added_cls_attributes = dict()
-    _added_cls_methods = set()
 
     def __init__(self, *args, **kwargs):
         self._added_attributes = dict()
@@ -74,3 +72,8 @@ class ShadowAttributesMixin:
         else:
             raise AttributeError("{!r} has no attribute {!r}".format(self, name))
         #     super().__getattr__(name)
+
+
+def repr_func(func: callable) -> str:
+    """Represent a function with its full qualname instead of just its name and an address."""
+    return "<{} {}>".format(type(func).__name__, fullqualname(func))

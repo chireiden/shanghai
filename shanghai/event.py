@@ -4,7 +4,8 @@ from collections import namedtuple, defaultdict
 import functools
 import enum
 
-from .logging import get_default_logger
+from .logging import get_default_logger, Logger
+from .util import repr_func
 
 NetworkEvent = namedtuple("NetworkEvent", "name value")
 NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional
@@ -99,35 +100,42 @@ class EventDispatcher:
 
     """Allows to register handlers and to dispatch events to said handlers, by priority."""
 
-    def __init__(self):
+    def __init__(self, logger: Logger = None):
         self.event_map = defaultdict(_PrioritizedSetList)
+        self.logger = logger or get_default_logger()
 
     def unregister(self, name: str, coroutine):
+        self.logger.ddebug("Unregistering event handler for event {!r}: {}"
+                           .format(name, coroutine))
         self.event_map[name].remove(coroutine)
 
     def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
+        self.logger.ddebug("Registering event handler for event {!r} (priority {}): {}"
+                           .format(name, priority, coroutine))
         if not asyncio.iscoroutinefunction(coroutine):
             raise ValueError("callable must be a coroutine function (defined with `async def`)")
 
         self.event_map[name].add(priority, coroutine)
 
     async def dispatch(self, name: str, *args):
-        get_default_logger().ddebug("Dispatching event {!r} with arguments {}".format(name, args))
+        self.logger.ddebug("Dispatching event {!r} with arguments {}".format(name, args))
         if name not in self.event_map:
-            get_default_logger().ddebug("No event handlers for event {!r}".format(name))
+            self.logger.ddebug("No event handlers for event {!r}".format(name))
             return
 
         for priority, handlers in self.event_map[name]:
-            get_default_logger().ddebug("Creating tasks for event {!r} (priority {}), from {}"
-                                        .format(name, priority, handlers))
+            # TODO prolly want to wrap this behind self.logger.isEnabledFor
+            # because it's very verbose
+            self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
+                               .format(name, priority, {repr_func(func) for func in handlers}))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
 
-            get_default_logger().ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
-                                        .format(name, priority, tasks))
+            self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
+                               .format(name, priority, tasks))
             results = await asyncio.gather(*tasks)
 
-            get_default_logger().ddebug("Results from event event {!r} (priority {}): {}"
-                                        .format(name, priority, results))
+            self.logger.ddebug("Results from event event {!r} (priority {}): {}"
+                               .format(name, priority, results))
             # TODO interpret results, handle exceptions
 
     @property
@@ -155,7 +163,7 @@ class GlobalEventDispatcher(EventDispatcher):
 
 class NetworkEventDispatcher(EventDispatcher):
 
-    def __init__(self, context):
+    def __init__(self, context, *args, **kwargs):
         super().__init__()
         self.context = context
 
@@ -171,8 +179,8 @@ class NetworkEventDispatcher(EventDispatcher):
 
 class MessageEventDispatcher(EventDispatcher):
 
-    def __init__(self, context):
-        super().__init__()
+    def __init__(self, context, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.context = context
 
     async def dispatch(self, msg):
