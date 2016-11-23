@@ -81,10 +81,16 @@ class _PrioritizedSetList:
 
 class EventDecorator:
 
+    allowed_names = None
+
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
 
     def __call__(self, name, priority=Priority.DEFAULT):
+        if self.allowed_names:
+            if name not in self.allowed_names:
+                raise ValueError("Unknown event name '{}'".format(name))
+
         def deco(coroutine):
             self.dispatcher.register(name, coroutine, priority)
             coroutine.unregister = functools.partial(self.dispatcher.unregister, name, coroutine)
@@ -103,6 +109,8 @@ class EventDispatcher:
     def __init__(self, logger: Logger = None):
         self.event_map = defaultdict(_PrioritizedSetList)
         self.logger = logger or get_default_logger()
+
+        self.decorator = EventDecorator(self)
 
     def unregister(self, name: str, coroutine):
         self.logger.ddebug("Unregistering event handler for event {!r}: {}"
@@ -138,27 +146,12 @@ class EventDispatcher:
                                .format(name, priority, results))
             # TODO interpret results, handle exceptions
 
-    @property
-    def decorator(self):
-        return EventDecorator(self)
-
-    # decorator
-    # def decorator(self, name, priority=Priority.DEFAULT):
-    #     def deco(coroutine):
-    #         self.register(name, coroutine, priority)
-    #         coroutine.unregister = functools.partial(self.unregister, name, coroutine)
-    #         return coroutine
-
-    #     return deco
-
 
 class GlobalEventDispatcher(EventDispatcher):
 
-    @property
-    def decorator(self):
-        # if name not in GlobalEventName.__members__.values():
-        #     raise ValueError("Unknown global event name '{}'".format(name))
-        return super().decorator
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.decorator.allowed_names = set(GlobalEventName.__members__.values())
 
 
 class NetworkEventDispatcher(EventDispatcher):
@@ -166,15 +159,10 @@ class NetworkEventDispatcher(EventDispatcher):
     def __init__(self, context, *args, **kwargs):
         super().__init__()
         self.context = context
+        self.decorator.allowed_names = set(NetworkEventName.__members__.values())
 
     async def dispatch(self, event: NetworkEvent):
         return await super().dispatch(event.name, self.context, event.value)
-
-    @property
-    def decorator(self):
-        # if name not in NetworkEventName.__members__.values():
-        #     raise ValueError("Unknown network event name '{}'".format(name))
-        return super().decorator
 
 
 class MessageEventDispatcher(EventDispatcher):
