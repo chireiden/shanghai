@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 import functools
 import enum
 
-from .logging import get_default_logger, Logger
+from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
 
 NetworkEvent = namedtuple("NetworkEvent", "name value")
@@ -132,18 +132,21 @@ class EventDispatcher:
             return
 
         for priority, handlers in self.event_map[name]:
-            # TODO prolly want to wrap this behind self.logger.isEnabledFor
-            # because it's very verbose
-            self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
-                               .format(name, priority, {repr_func(func) for func in handlers}))
+            # Use isEnabledFor because this will be called often
+            is_ddebug = self.logger.isEnabledFor(LogLevels.DDEBUG)
+            if is_ddebug:
+                self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
+                                   .format(name, priority, {repr_func(func) for func in handlers}))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
 
-            self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
-                               .format(name, priority, tasks))
+            if is_ddebug:
+                self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
+                                   .format(name, priority, tasks))
             results = await asyncio.gather(*tasks)
 
-            self.logger.ddebug("Results from event event {!r} (priority {}): {}"
-                               .format(name, priority, results))
+            if is_ddebug:
+                self.logger.ddebug("Results from event {!r} (priority {}): {}"
+                                   .format(name, priority, results))
             # TODO interpret results, handle exceptions
 
 
