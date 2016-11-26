@@ -87,7 +87,7 @@ class PluginSystem:
 
         # add to registry
         cls.plugin_registry[identifier] = plugin
-        sys.modules['shanghai.plugins.{}'.format(identifier)] = plugin
+        sys.modules['shanghai.plugins.{}'.format(identifier)] = plugin.module
         return plugin
 
     @classmethod
