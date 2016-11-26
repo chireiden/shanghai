@@ -15,12 +15,15 @@ class Shanghai:
         self.loop = loop
         # not sure where else to put it. maybe an init_plugins here?
         # but this is just for testing for now.
-        self.plugin_system = PluginSystem()
-        self.plugin_system.load_plugin('ctcp')
-        self.plugin_system.load_plugin('message')
-        self.plugin_system.load_plugin('ping')
+        self.core_plugins = PluginSystem('core_plugins', is_core=True)
+        self.user_plugins = PluginSystem('plugins')
 
-        self.plugin_system.load_plugin('test')
+        self.core_plugins.load_plugin('ctcp')
+        self.core_plugins.load_plugin('message')
+        self.core_plugins.load_plugin('ping')
+
+        # TODO: load plugins from configuration
+        self.user_plugins.load_plugin('test')
 
     def init_networks(self):
         for netconf in self.config.networks:

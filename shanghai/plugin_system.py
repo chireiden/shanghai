@@ -16,47 +16,64 @@ class CyclicDependency(Exception):
 
 class Plugin:
 
-    def __init__(self, info, module):
+    def __init__(self, info, module, namespace):
         self.logger = get_logger('plugin', info['identifier'])
         self.info = info
         self.module = module
+        self.module_name = 'shanghai.{}.{}'.format(namespace, info['identifier'])
 
     def __repr__(self):
-        return '<Plugin {identifier}: {name} {version} - {description}>'.format(**self.info)
+        return '<Plugin {module_name}: {name} {version} - {description}>'.format(
+            module_name=self.module_name, **self.info)
 
 
 class PluginSystem:
     if sys.platform == 'win32':
         # %APPDATA%/shanghai/plugins
-        _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai\plugins"))
+        _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai"))
     else:
         # ~/.config/shanghai/plugins
-        _home_config_path = pathlib.Path("~/.config/shanghai/plugins").expanduser()
+        _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
+
+    _core_plugin_base_path = pathlib.Path(__file__).parent
 
     # TODO: add configuration location
-    PLUGIN_SEARCH_PATHS = [
-        # ./plugins/
+    PLUGIN_SEARCH_BASE_PATHS = [
+        # current directory
         # TODO might be redundant
-        pathlib.Path(os.getcwd(), 'plugins'),
+        pathlib.Path(os.getcwd()),
         _home_config_path,
-        # <SHANGHAI_PACKAGE_DIR>/plugins/
-        pathlib.Path(pathlib.Path(__file__).parent, 'plugins'),
+        # <SHANGHAI_PACKAGE_DIR>
+        _core_plugin_base_path,
     ]
 
     plugin_factory = Plugin
 
-    def __init__(self):
-        # this is the easy way. "plugins" directory exist, but it is
-        # not a real sub-package anyway
+    def __init__(self, namespace, is_core=False):
+        if not namespace.isidentifier():
+            raise ValueError(
+                'Invalid plugin namespace. {!r} contains invalid symbol(s).'.format(namespace))
+        if keyword.iskeyword(namespace):
+            raise ValueError(
+                'Invalid plugin namespace. {!r} is a built in keyword.'.format(namespace))
+
+        self.namespace = namespace
         sys.modules['shanghai'].plugins = self
-        sys.modules['shanghai.plugins'] = self
+        sys.modules['shanghai.{}'.format(namespace)] = self
+
+        if is_core:
+            # just search in one single path
+            self.plugin_search_paths = [pathlib.Path(self._core_plugin_base_path, namespace)]
+        else:
+            self.plugin_search_paths = [pathlib.Path(base_path, namespace)
+                                        for base_path in self.PLUGIN_SEARCH_BASE_PATHS]
 
         self.plugin_registry = {}
         self.logger = get_default_logger()
 
     def __getattr__(self, item):
         if item in self.plugin_registry:
-            return self.plugin_registry[item]
+            return self.plugin_registry[item].module
         raise AttributeError(item)
 
     def load_plugin(self, identifier, *, dependency_path=None, is_core=False):
@@ -73,7 +90,7 @@ class PluginSystem:
             if not dependency_path:
                 self.logger.warn('Plugin', identifier, 'already exists.')
             return self.plugin_registry[identifier]
-        for search_path in self.PLUGIN_SEARCH_PATHS:
+        for search_path in self.plugin_search_paths:
             try:
                 module_path = self._find_module_path(search_path, identifier)
             except OSError:
@@ -83,12 +100,13 @@ class PluginSystem:
                                                      dependency_path=dependency_path)
                 break
         else:  # I always wanted to use this at least once
-            raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
-                                    .format(identifier, '\n'.join(self.PLUGIN_SEARCH_PATHS)))
+            raise FileNotFoundError(
+                'Could not find plugin {!r} in any of the search paths:\n{}'
+                .format(identifier, '\n'.join(str(p) for p in self.plugin_search_paths)))
 
         # add to registry
         self.plugin_registry[identifier] = plugin
-        module_name = 'shanghai.plugins.{}'.format(identifier)
+        module_name = 'shanghai.{}.{}'.format(self.namespace, identifier)
         sys.modules[module_name] = plugin.module
         self.logger.debug("Setting sys.modules[{!r}] to {}".format(module_name, plugin.module))
         return plugin
@@ -123,7 +141,7 @@ class PluginSystem:
         spec.loader.exec_module(module)
         self.logger.info('Found plugin in', module.__file__)
 
-        plugin = self.plugin_factory(info, module)
+        plugin = self.plugin_factory(info, module, self.namespace)
         self.logger.info("Loaded plugin", plugin)
         return plugin
 
