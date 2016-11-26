@@ -21,17 +21,6 @@ class Plugin:
         self.info = info
         self.module = module
 
-    def initialize(self):
-        func_ref = getattr(self.module, 'initialize', None)
-        if func_ref is None:
-            self.logger.debug('No Initialization for plugin', self)
-            return
-        if not callable(func_ref):
-            self.logger.warn("'Initialize' is not callable in {!r}"
-                             .format(self.info['identifier']))
-        self.logger.debug('Initialize plugin', self)
-        func_ref(self)
-
     def __repr__(self):
         return '<Plugin {identifier}: {name} {version} - {description}>'.format(**self.info)
 
@@ -99,7 +88,6 @@ class PluginSystem:
         # add to registry
         cls.plugin_registry[identifier] = plugin
         sys.modules['shanghai.plugins.{}'.format(identifier)] = plugin
-        plugin.initialize()
         return plugin
 
     @classmethod
