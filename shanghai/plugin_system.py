@@ -100,8 +100,9 @@ class PluginSystem:
                                                      dependency_path=dependency_path)
                 break
         else:  # I always wanted to use this at least once
-            raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
-                                    .format(identifier, '\n'.join(self.plugin_search_paths)))
+            raise FileNotFoundError(
+                'Could not find plugin {!r} in any of the search paths:\n{}'
+                .format(identifier, '\n'.join(str(p) for p in self.plugin_search_paths)))
 
         # add to registry
         self.plugin_registry[identifier] = plugin
