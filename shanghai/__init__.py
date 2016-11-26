@@ -15,7 +15,7 @@ class Shanghai:
         self.loop = loop
         # not sure where else to put it. maybe an init_plugins here?
         # but this is just for testing for now.
-        self.core_plugins = PluginSystem('core_plugins')
+        self.core_plugins = PluginSystem('core_plugins', is_core=True)
         self.user_plugins = PluginSystem('plugins')
 
         self.core_plugins.load_plugin('ctcp')

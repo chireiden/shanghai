@@ -30,24 +30,26 @@ class Plugin:
 class PluginSystem:
     if sys.platform == 'win32':
         # %APPDATA%/shanghai/plugins
-        _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai\plugins"))
+        _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai"))
     else:
         # ~/.config/shanghai/plugins
-        _home_config_path = pathlib.Path("~/.config/shanghai/plugins").expanduser()
+        _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
+
+    _core_plugin_base_path = pathlib.Path(__file__).parent
 
     # TODO: add configuration location
-    PLUGIN_SEARCH_PATHS = [
-        # ./plugins/
+    PLUGIN_SEARCH_BASE_PATHS = [
+        # current directory
         # TODO might be redundant
-        pathlib.Path(os.getcwd(), 'plugins'),
+        pathlib.Path(os.getcwd()),
         _home_config_path,
-        # <SHANGHAI_PACKAGE_DIR>/plugins/
-        pathlib.Path(pathlib.Path(__file__).parent, 'plugins'),
+        # <SHANGHAI_PACKAGE_DIR>
+        _core_plugin_base_path,
     ]
 
     plugin_factory = Plugin
 
-    def __init__(self, namespace):
+    def __init__(self, namespace, is_core=False):
         if not namespace.isidentifier():
             raise ValueError(
                 'Invalid plugin namespace. {!r} contains invalid symbol(s).'.format(namespace))
@@ -58,6 +60,14 @@ class PluginSystem:
         self.namespace = namespace
         sys.modules['shanghai'].plugins = self
         sys.modules['shanghai.{}'.format(namespace)] = self
+
+        if is_core:
+            # just search in one single path
+            self.plugin_search_paths = [str(pathlib.Path(self._core_plugin_base_path, namespace))]
+        else:
+            self.plugin_search_paths = []
+            for base_path in self.PLUGIN_SEARCH_BASE_PATHS:
+                self.plugin_search_paths.append(str(pathlib.Path(base_path, namespace)))
 
         self.plugin_registry = {}
         self.logger = get_default_logger()
@@ -81,7 +91,7 @@ class PluginSystem:
             if not dependency_path:
                 self.logger.warn('Plugin', identifier, 'already exists.')
             return self.plugin_registry[identifier]
-        for search_path in self.PLUGIN_SEARCH_PATHS:
+        for search_path in self.plugin_search_paths:
             try:
                 module_path = self._find_module_path(search_path, identifier)
             except OSError:
@@ -92,7 +102,7 @@ class PluginSystem:
                 break
         else:  # I always wanted to use this at least once
             raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
-                                    .format(identifier, '\n'.join(self.PLUGIN_SEARCH_PATHS)))
+                                    .format(identifier, '\n'.join(self.plugin_search_paths)))
 
         # add to registry
         self.plugin_registry[identifier] = plugin
