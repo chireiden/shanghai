@@ -63,11 +63,10 @@ class PluginSystem:
 
         if is_core:
             # just search in one single path
-            self.plugin_search_paths = [str(pathlib.Path(self._core_plugin_base_path, namespace))]
+            self.plugin_search_paths = [pathlib.Path(self._core_plugin_base_path, namespace)]
         else:
-            self.plugin_search_paths = []
-            for base_path in self.PLUGIN_SEARCH_BASE_PATHS:
-                self.plugin_search_paths.append(str(pathlib.Path(base_path, namespace)))
+            self.plugin_search_paths = [pathlib.Path(base_path, namespace)
+                                        for base_path in self.PLUGIN_SEARCH_BASE_PATHS]
 
         self.plugin_registry = {}
         self.logger = get_default_logger()
