@@ -5,7 +5,7 @@ import importlib.util
 import pathlib
 import os
 import sys
-import unicodedata
+import keyword
 
 from .logging import get_logger, get_default_logger
 
@@ -70,27 +70,12 @@ class PluginSystem:
 
     @classmethod
     def load_plugin(cls, identifier, *, dependency_path=None, is_core=False):
-        # Check the identifier to see if it's a valid python identifier referring:
-        # https://docs.python.org/3/reference/lexical_analysis.html#grammar-token-identifier
-        # Reason: if plugins should be importable, we must only allow valid identifiers.
-
-        if not identifier:
-            raise ValueError('Invalid plugin name {!r}.'.format(identifier))
-        identifier = unicodedata.normalize('NFKC', identifier)
-
-        id_start_cats = ('Lu', 'Ll', 'Lt', 'Lm', 'Lo', 'Nl')
-        id_continue_cats = id_start_cats + ('Mn', 'Mc', 'Nd', 'Pc')
-        id_start_cp = (ord('_'), 0x2118, 0x212E, 0x309B, 0x309C)
-        id_continue_cp = id_start_cp + (0x00B7, 0x0387, *range(0x1369, 0x1371 + 1), 0x19DA)
-
-        _start = identifier[0]
-        _continue = identifier[1:]
-        if unicodedata.category(_start) not in id_start_cats and ord(_start) not in id_start_cp:
-            raise ValueError('Invalid plugin name. {!r} starts with an invalid symbol.')
-
-        if any(unicodedata.category(char) not in id_continue_cats
-               and ord(char not in id_continue_cp) for char in _continue):
-            raise ValueError('Invalid plugin name. {!r} contains invalid symbol(s).')
+        if not identifier.isidentifier():
+            raise ValueError(
+                'Invalid plugin name. {!r} contains invalid symbol(s).'.format(identifier))
+        if keyword.iskeyword(identifier):
+            raise ValueError(
+                'Invalid plugin name. {!r} is a built in keyword.'.format(identifier))
 
         if dependency_path is None:
             dependency_path = []
