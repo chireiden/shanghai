@@ -64,7 +64,7 @@ class PluginSystem:
 
     def __getattr__(self, item):
         if item in self.plugin_registry:
-            return self.plugin_registry[item]
+            return self.plugin_registry[item].module
         raise AttributeError(item)
 
     def load_plugin(self, identifier, *, dependency_path=None, is_core=False):
