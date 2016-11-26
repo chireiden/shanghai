@@ -23,6 +23,13 @@ class GlobalEventName(str, enum.Enum):
     INIT_NETWORK_CTX = "init_network_context"
 
 
+class ReturnValue(enum.Enum):
+    EAT = True
+    NONE = None
+
+    _all = (EAT, NONE)
+
+
 class Priority(int, enum.Enum):
     PRE_CORE = 5
     CORE = 0
@@ -142,12 +149,31 @@ class EventDispatcher:
             if is_ddebug:
                 self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
                                    .format(name, priority, tasks))
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
             if is_ddebug:
                 self.logger.ddebug("Results from event {!r} (priority {}): {}"
                                    .format(name, priority, results))
-            # TODO interpret results, handle exceptions
+
+            eaten = False
+            for handler, task, result in zip(handlers, tasks, results):
+                if isinstance(result, Exception):
+                    self.logger.exception("Exception in event handler {!r} for event {!r} "
+                                          "(priority {}):"
+                                          .format(handler, name, priority),
+                                          exc_info=result)
+
+                elif result is ReturnValue.EAT:
+                    self.logger.debug("Eating event {!r} at priority {} at the request of {}"
+                                      .format(name, priority, handler))
+                    eaten = True
+                elif result not in ReturnValue._all.value:
+                    self.logger.warning("Received unrecognized return value from {} "
+                                        "for event {!r} (priority {}): {!r}"
+                                        .format(handler, name, priority, result))
+
+            if eaten:
+                return ReturnValue.EAT
 
 
 class GlobalEventDispatcher(EventDispatcher):

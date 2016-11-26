@@ -1,6 +1,6 @@
 """Just for testing"""
 
-from shanghai.event import global_event, GlobalEventName
+from shanghai.event import global_event, GlobalEventName, ReturnValue
 
 __plugin_name__ = 'Test'
 __plugin_version__ = 'β.γ.μ'
@@ -29,3 +29,8 @@ async def init_context(ctx):
             if len(words) < 2:
                 return
             ctx.send_ctcp(message.prefix.name, words[1], ' '.join(words[2:]))
+
+        elif words[0] == '!eat':
+            if len(words) == 2:
+                return words[1]
+            return ReturnValue.EAT
