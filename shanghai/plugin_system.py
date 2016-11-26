@@ -43,7 +43,6 @@ class PluginSystem:
         pathlib.Path(pathlib.Path(__file__).parent, 'plugins'),
     ]
 
-    plugin_registry = {}
     plugin_factory = Plugin
 
     def __init__(self):
@@ -52,13 +51,15 @@ class PluginSystem:
         sys.modules['shanghai'].plugins = self
         sys.modules['shanghai.plugins'] = self
 
+        self.plugin_registry = {}
+        self.logger = get_default_logger()
+
     def __getattr__(self, item):
         if item in self.plugin_registry:
             return self.plugin_registry[item]
         raise AttributeError(item)
 
-    @classmethod
-    def load_plugin(cls, identifier, *, dependency_path=None, is_core=False):
+    def load_plugin(self, identifier, *, dependency_path=None, is_core=False):
         if not identifier.isidentifier():
             raise ValueError(
                 'Invalid plugin name. {!r} contains invalid symbol(s).'.format(identifier))
@@ -68,26 +69,28 @@ class PluginSystem:
 
         if dependency_path is None:
             dependency_path = []
-        if identifier in cls.plugin_registry:
+        if identifier in self.plugin_registry:
             if not dependency_path:
-                get_default_logger().warn('Plugin', identifier, 'already exists.')
-            return cls.plugin_registry[identifier]
-        for search_path in cls.PLUGIN_SEARCH_PATHS:
+                self.logger.warn('Plugin', identifier, 'already exists.')
+            return self.plugin_registry[identifier]
+        for search_path in self.PLUGIN_SEARCH_PATHS:
             try:
-                module_path = cls._find_module_path(search_path, identifier)
+                module_path = self._find_module_path(search_path, identifier)
             except OSError:
                 pass
             else:
-                plugin = cls._load_plugin_as_module(module_path, identifier,
-                                                    dependency_path=dependency_path)
+                plugin = self._load_plugin_as_module(module_path, identifier,
+                                                     dependency_path=dependency_path)
                 break
         else:  # I always wanted to use this at least once
             raise FileNotFoundError('Could not find plugin {!r} in any of the search paths:\n{}'
-                                    .format(identifier, '\n'.join(cls.PLUGIN_SEARCH_PATHS)))
+                                    .format(identifier, '\n'.join(self.PLUGIN_SEARCH_PATHS)))
 
         # add to registry
-        cls.plugin_registry[identifier] = plugin
-        sys.modules['shanghai.plugins.{}'.format(identifier)] = plugin.module
+        self.plugin_registry[identifier] = plugin
+        module_name = 'shanghai.plugins.{}'.format(identifier)
+        sys.modules[module_name] = plugin.module
+        self.logger.debug("Setting sys.modules[{!r}] to {}".format(module_name, plugin.module))
         return plugin
 
     @classmethod
@@ -100,30 +103,28 @@ class PluginSystem:
             return module_path
         raise OSError('Error trying to load {!r}'.format(str(path)))
 
-    @classmethod
-    def _load_plugin_as_module(cls, path: pathlib.Path, identifier, *, dependency_path):
-        # TODO: load dependencies first!
-        info = cls._get_plugin_info(path, identifier)
-        # info['depends'] and info['conflicts']
+    def _load_plugin_as_module(self, path: pathlib.Path, identifier, *, dependency_path):
+        info = self._get_plugin_info(path, identifier)
+        # TODO info['conflicts']
         for dependency in info['depends']:
             if dependency in dependency_path:
                 raise CyclicDependency('Cyclic dependency detected: {}'
                                        .format(' -> '.join([identifier] + dependency_path)))
-            cls.load_plugin(dependency, dependency_path=dependency_path + [identifier])
+            self.load_plugin(dependency, dependency_path=dependency_path + [identifier])
 
         if dependency_path:
-            get_default_logger().info('Loading plugin', identifier,
-                                      'as dependency of', dependency_path)
+            self.logger.info('Loading plugin', identifier,
+                             'as dependency of', dependency_path)
         else:
-            get_default_logger().info('Loading plugin', identifier)
+            self.logger.info('Loading plugin', identifier)
         spec = importlib.util.spec_from_file_location(identifier, str(path))
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        get_default_logger().info('Found plugin in', module.__file__)
+        self.logger.info('Found plugin in', module.__file__)
 
-        plugin = cls.plugin_factory(info, module)
-        get_default_logger().info(plugin)
+        plugin = self.plugin_factory(info, module)
+        self.logger.info("Loaded plugin", plugin)
         return plugin
 
     @staticmethod
