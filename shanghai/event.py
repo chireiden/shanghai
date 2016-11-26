@@ -141,17 +141,17 @@ class EventDispatcher:
         for priority, handlers in self.event_map[name]:
             # Use isEnabledFor because this will be called often
             is_ddebug = self.logger.isEnabledFor(LogLevels.DDEBUG)
-            if is_ddebug:
+            if is_ddebug:  # pragma: nocover
                 self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
                                    .format(name, priority, {repr_func(func) for func in handlers}))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
 
-            if is_ddebug:
+            if is_ddebug:  # pragma: nocover
                 self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
                                    .format(name, priority, tasks))
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            if is_ddebug:
+            if is_ddebug:  # pragma: nocover
                 self.logger.ddebug("Results from event {!r} (priority {}): {}"
                                    .format(name, priority, results))
 
