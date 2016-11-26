@@ -196,3 +196,7 @@ def get_logger(context, name, config=None, open_msg=False):
         logger.addHandler(stream_handler)
 
     return logger
+
+# Disable logging for the 'default' default logger
+_default_logger = get_logger('logging', 'default',
+                             Configuration({'logging': {'disable': True}}))

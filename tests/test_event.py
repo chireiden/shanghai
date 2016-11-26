@@ -1,18 +1,24 @@
 
 import asyncio
-import unittest
 from unittest import mock
 
-from shanghai import event, logging
+import pytest
+
+from shanghai import event
 
 
-class TestPriority(unittest.TestCase):
+@pytest.fixture
+def loop():
+    return asyncio.get_event_loop()
+
+
+class TestPriority:
 
     def test_core_gt_default(self):
         assert event.Priority.CORE > event.Priority.DEFAULT
 
 
-class TestNetworkEvent(unittest.TestCase):
+class TestNetworkEvent:
 
     def test_attributes(self):
         a, b = object(), object()
@@ -25,7 +31,7 @@ class TestNetworkEvent(unittest.TestCase):
         assert evt.value is None
 
 
-class TestPrioritizedSetList(unittest.TestCase):
+class TestPrioritizedSetList:
 
     def test_bool(self):
         prio_set_list = event._PrioritizedSetList()
@@ -64,11 +70,13 @@ class TestPrioritizedSetList(unittest.TestCase):
         obj = object()
         prio_set_list.add(0, obj)
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.add(0, obj)
+        excinfo.match(r"has already been added")
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.add(1, obj)
+        excinfo.match(r"has already been added")
 
     def test_contains(self):
         prio_set_list = event._PrioritizedSetList()
@@ -95,22 +103,18 @@ class TestPrioritizedSetList(unittest.TestCase):
         prio_set_list.remove(obj)
         assert not prio_set_list
 
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             prio_set_list.remove(obj)
+        excinfo.match(r"can not be found")
 
 
-class TestEventDispatchers(unittest.TestCase):
+class TestEventDispatchers:
 
-    def setUp(self):
-        config = {
-            'disable-logging': True,
-            'disable-logging-output': True,
-        }
-        self.logger = logging.get_logger('test', 'test', config=config)
-        logging.set_default_logger(self.logger)
+    @pytest.fixture
+    def dispatcher(self,):
+        return event.EventDispatcher()
 
-    def test_register(self):
-        dispatcher = event.EventDispatcher()
+    def test_register(self, dispatcher):
 
         async def coroutinefunc(*args):
             return True
@@ -118,22 +122,32 @@ class TestEventDispatchers(unittest.TestCase):
         dispatcher.register("some_name", coroutinefunc)
         assert coroutinefunc in dispatcher.event_map["some_name"]
 
-    def test_register_callable(self):
-        dispatcher = event.EventDispatcher()
+    def test_unregister(self, dispatcher):
 
-        with self.assertRaises(ValueError):
+        async def coroutinefunc(*args):
+            return True
+
+        dispatcher.register("some_name", coroutinefunc)
+        dispatcher.unregister("some_name", coroutinefunc)
+        assert coroutinefunc not in dispatcher.event_map["some_name"]
+        with pytest.raises(ValueError) as excinfo:
+            dispatcher.unregister("some_name", coroutinefunc)
+        excinfo.match(r"Object .* can not be found")
+
+    def test_register_callable(self, dispatcher):
+
+        with pytest.raises(ValueError) as excinfo:
             dispatcher.register("some_name", lambda: None)
+        excinfo.match(r"callable must be a coroutine function")
 
-    def test_dispatch(self):
-        dispatcher = event.EventDispatcher()
-        loop = asyncio.get_event_loop()
+    def test_dispatch(self, dispatcher, loop):
         name = "some_name"
         args = list(range(10))
         called = 0
 
         async def coroutinefunc(*local_args):
             nonlocal called
-            assert args == list(local_args)
+            assert list(local_args) == args
             called += 1
 
         dispatcher.register(name, coroutinefunc)
@@ -142,54 +156,92 @@ class TestEventDispatchers(unittest.TestCase):
 
         assert called == 1
 
-    # TODO more dispatch tests
+    def test_dispatch_priority(self, dispatcher, loop):
+        name = "some_name"
+        called = list()
 
-    @unittest.skip("TODO")
-    def test_network_dispatch(self):
-        pass
+        async def coroutinefunc():
+            called.append(coroutinefunc)
 
-    @unittest.skip("TODO")
-    def test_message_dispatch(self):
-        pass
+        async def coroutinefunc2():
+            called.append(coroutinefunc2)
+
+        dispatcher.register(name, coroutinefunc)
+        dispatcher.register(name, coroutinefunc2, priority=event.Priority.DEFAULT + 1)
+        loop.run_until_complete(dispatcher.dispatch(name))
+
+        assert called == [coroutinefunc2, coroutinefunc]
+
+    def test_network_dispatch(self, loop):
+        context = mock.Mock()
+        dispatcher = event.NetworkEventDispatcher(context)
+        evt = event.NetworkEvent("name", 456)
+        called = False
+
+        async def coroutinefunc(ctx, value):
+            nonlocal called
+            assert ctx is context
+            assert value == 456
+            called = True
+
+        dispatcher.register("name", coroutinefunc)
+        loop.run_until_complete(dispatcher.dispatch(evt))
+
+        assert called
 
 
-class TestDecorators(unittest.TestCase):
+class TestEventDecorator:
 
-    def test_network_event(self):
-        @event.network_event(event.NetworkEventName.CONNECTED)
-        async def on_connected(network, _):
+    @pytest.fixture
+    def nw_evt_disp(self):
+        context = mock.Mock()
+        return event.NetworkEventDispatcher(context)
+
+    def test_calls_register(self):
+        dispatcher = mock.Mock(event.EventDispatcher)
+        deco = event.EventDecorator(dispatcher)
+
+        @deco('evt')
+        async def on_connected(ctx, _):
             pass
 
-        prio_set_list = event.network_event_dispatcher.event_map[event.NetworkEventName.CONNECTED]
+        dispatcher.register.assert_called_with('evt', on_connected, event.Priority.DEFAULT)
+
+        on_connected.unregister()
+        dispatcher.unregister.assert_called_with('evt', on_connected)
+
+    def test_core_calls_register(self):
+        dispatcher = mock.Mock(event.EventDispatcher)
+        deco = event.EventDecorator(dispatcher)
+
+        @deco.core('core_evt')
+        async def on_connected(ctx, _):
+            pass
+
+        dispatcher.register.assert_called_with('core_evt', on_connected, event.Priority.CORE)
+
+        on_connected.unregister()
+        dispatcher.unregister.assert_called_with('core_evt', on_connected)
+
+    def test_network_event(self, nw_evt_disp):
+        deco = nw_evt_disp.decorator
+
+        @deco(event.NetworkEventName.CONNECTED)
+        async def on_connected(ctx, _):
+            pass
+
+        prio_set_list = nw_evt_disp.event_map[event.NetworkEventName.CONNECTED]
         assert on_connected in prio_set_list
 
-    def test_network_event_exists(self):
-        with self.assertRaises(ValueError):
-            @event.network_event(123)
+    def test_network_event_exists(self, nw_evt_disp):
+        deco = nw_evt_disp.decorator
+
+        with pytest.raises(ValueError):
+            @deco(123)
             async def x():
                 pass
 
-        with self.assertRaises(ValueError):
-            @event.network_event('name')
+        with pytest.raises(ValueError):
+            @deco('name')
             async def xx():
                 pass
-
-    @mock.patch("shanghai.event.message_event_dispatcher", autospec=True)
-    def test_message_event_mock(self, dispatcher):
-
-        @event.message_event('PRIVMSG')
-        async def on_connected(network, _):
-            pass
-
-        dispatcher.register.assert_called_with('PRIVMSG', on_connected, event.Priority.DEFAULT)
-
-        on_connected.unregister()
-        dispatcher.unregister.assert_called_with('PRIVMSG', on_connected)
-
-    def test_message_event(self):
-        @event.message_event('PRIVMSG')
-        async def on_connected(network, _):
-            pass
-
-        prio_set_list = event.message_event_dispatcher.event_map['PRIVMSG']
-        assert on_connected in prio_set_list

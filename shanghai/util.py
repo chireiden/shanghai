@@ -1,25 +1,31 @@
 
 import functools
+from typing import Union, Callable
+
+from fullqualname import fullqualname
 
 
 class ShadowAttributesMixin:
 
     """Mixin class that allows to add (and set) attributes without collisions.
 
-    Supports instance and class attributes.
-    """
+    Instead of directly setting attributes (or using `setattr`) for the first time,
+    use `add_attribute` or `add_method`.
 
-    # classattributes
-    _added_cls_attributes = dict()
-    _added_cls_methods = set()
+    When changing adding attributes,
+    use `set_attribute` (not designed to be used with 'methods').
+
+    When removing attributes,
+    use `remove_attribute`.
+    """
 
     def __init__(self, *args, **kwargs):
         self._added_attributes = dict()
 
         super().__init__(*args, **kwargs)
 
-    def add_attribute(self, name, value=None):
-        """Allows for plugins to add attributes to the network object.
+    def add_attribute(self, name: str, value=None):
+        """Allows to add attributes to an object.
 
         Use this instead of directly setting attributes (or with `setattr`).
         For adding methods, use add_method.
@@ -28,68 +34,46 @@ class ShadowAttributesMixin:
             raise KeyError("Attribute '{}' is already defined".format(name))
         self._added_attributes[name] = value
 
-    def set_attribute(self, name, value=None):
-        """Allows for plugins to modify their added attributes to the network object."""
+    def set_attribute(self, name: str, value=None):
+        """Allows to modify added attributes to an object."""
         if name not in self._added_attributes:
             raise KeyError("Attribute '{}' is not defined".format(name))
         self._added_attributes[name] = value
 
-    def remove_attribute(self, name):
+    def add_method(self, name_or_function: Union[str, Callable], function: callable = None):
+        """Allows to add methods to an object.
+
+        Added functions will be called with an implicit `self` argment,
+        like for normal methods.
+
+        Also functions as a decorator and infers the attribute name from the function name.
+        """
+        if callable(name_or_function):
+            function = name_or_function
+            name = function.__name__
+        elif not callable(function):
+            raise ValueError("Parameter is not callable")
+        else:
+            name = name_or_function
+
+        self.add_attribute(name, functools.partial(function, self))
+
+        return function
+
+    def remove_attribute(self, name: str):
         """Allows for plugins to remove their added attributes to the network object."""
         if name not in self._added_attributes:
             raise KeyError("Attribute '{}' is not defined".format(name))
         del self._added_attributes[name]
 
-    @classmethod
-    def add_cls_attribute(cls, name, value=None):
-        """Allows for plugins to add attributes to the network class.
-
-        Use this instead of directly setting attributes (or with `setattr`).
-        For adding methods, use add_method.
-        """
-        if hasattr(cls, name) or name in cls._added_cls_attributes:
-            raise KeyError("Attribute '{}' is already defined".format(name))
-        cls._added_cls_attributes[name] = value
-
-    @classmethod
-    def set_cls_attribute(cls, name, value=None):
-        """Allows for plugins to modify their added attributes to the network class."""
-        if name not in cls._added_cls_attributes:
-            raise KeyError("Attribute '{}' is not defined".format(name))
-        cls._added_cls_attributes[name] = value
-
-    @classmethod
-    def add_cls_method(cls, name, method):
-        """Allows for plugins to add methods to the network class.
-
-        Use this instead of directly setting attributes (or with `setattr`).
-        """
-        if not callable(method):
-            raise ValueError("Not callable")
-
-        cls.add_cls_attribute(name, method)
-        cls._added_cls_methods.add(name)
-
-    @classmethod
-    def remove_cls_attribute(cls, name, value):
-        """Allows for plugins to remove their added attributes to the network class."""
-        if name not in cls._added_cls_attributes:
-            raise KeyError("Attribute '{}' is not defined".format(name))
-        del cls._added_cls_attributes[name]
-
     def __getattr__(self, name):
         if name in self._added_attributes:
-            attr = self._added_attributes[name]
-            if name in self.added_methods:
-                # Wrap callable with `self` because it would be missing otherwise.
-                return functools.partial(attr, self)
-            else:
-                return attr
-        elif name in self._added_cls_attributes:
-            attr = self._added_cls_attributes[name]
-            if name in self._added_cls_methods:
-                return functools.partial(attr, self)
-            else:
-                return attr
+            return self._added_attributes[name]
         else:
-            super().__getattr__(name)
+            raise AttributeError("{!r} has no attribute {!r}".format(self, name))
+        #     super().__getattr__(name)
+
+
+def repr_func(func: callable) -> str:
+    """Represent a function with its full qualname instead of just its name and an address."""
+    return "<{} {}>".format(type(func).__name__, fullqualname(func))

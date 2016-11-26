@@ -9,6 +9,7 @@ import colorama
 
 from . import Shanghai
 from .config import ShanghaiConfiguration
+from .event import global_dispatcher
 from .logging import set_default_logger, get_logger, LogLevels
 
 
@@ -79,8 +80,9 @@ def main():
 
     config = ShanghaiConfiguration.from_filename('shanghai.yaml')
 
-    default_logger = get_logger('main', 'main', config, open_msg=True)
+    default_logger = get_logger('main', 'main.py', config, open_msg=True)
     set_default_logger(default_logger)
+    global_dispatcher.logger = get_logger('main', 'event.py', config)
 
     try:
         import uvloop
@@ -110,7 +112,7 @@ def main():
                 print("network '{}' not found".format(nw_name))
                 return
             network = bot.networks[nw_name]['network']
-            network.send_line(irc_line)
+            network._context.send_line(irc_line)
 
     print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
     stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))

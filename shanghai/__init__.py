@@ -16,8 +16,10 @@ class Shanghai:
         # not sure where else to put it. maybe an init_plugins here?
         # but this is just for testing for now.
         self.plugin_system = PluginSystem()
-        self.plugin_system.load_plugin('ping')
         self.plugin_system.load_plugin('ctcp')
+        self.plugin_system.load_plugin('message')
+        self.plugin_system.load_plugin('ping')
+
         self.plugin_system.load_plugin('test')
 
     def init_networks(self):
