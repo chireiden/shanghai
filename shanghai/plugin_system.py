@@ -16,13 +16,15 @@ class CyclicDependency(Exception):
 
 class Plugin:
 
-    def __init__(self, info, module):
+    def __init__(self, info, module, namespace):
         self.logger = get_logger('plugin', info['identifier'])
         self.info = info
         self.module = module
+        self.module_name = 'shanghai.{}.{}'.format(namespace, info['identifier'])
 
     def __repr__(self):
-        return '<Plugin {identifier}: {name} {version} - {description}>'.format(**self.info)
+        return '<Plugin {module_name}: {name} {version} - {description}>'.format(
+            module_name=self.module_name, **self.info)
 
 
 class PluginSystem:
@@ -45,11 +47,17 @@ class PluginSystem:
 
     plugin_factory = Plugin
 
-    def __init__(self):
-        # this is the easy way. "plugins" directory exist, but it is
-        # not a real sub-package anyway
+    def __init__(self, namespace):
+        if not namespace.isidentifier():
+            raise ValueError(
+                'Invalid plugin namespace. {!r} contains invalid symbol(s).'.format(namespace))
+        if keyword.iskeyword(namespace):
+            raise ValueError(
+                'Invalid plugin namespace. {!r} is a built in keyword.'.format(namespace))
+
+        self.namespace = namespace
         sys.modules['shanghai'].plugins = self
-        sys.modules['shanghai.plugins'] = self
+        sys.modules['shanghai.{}'.format(namespace)] = self
 
         self.plugin_registry = {}
         self.logger = get_default_logger()
@@ -88,7 +96,7 @@ class PluginSystem:
 
         # add to registry
         self.plugin_registry[identifier] = plugin
-        module_name = 'shanghai.plugins.{}'.format(identifier)
+        module_name = 'shanghai.{}.{}'.format(self.namespace, identifier)
         sys.modules[module_name] = plugin.module
         self.logger.debug("Setting sys.modules[{!r}] to {}".format(module_name, plugin.module))
         return plugin
@@ -123,7 +131,7 @@ class PluginSystem:
         spec.loader.exec_module(module)
         self.logger.info('Found plugin in', module.__file__)
 
-        plugin = self.plugin_factory(info, module)
+        plugin = self.plugin_factory(info, module, self.namespace)
         self.logger.info("Loaded plugin", plugin)
         return plugin
 
