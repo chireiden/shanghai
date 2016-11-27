@@ -23,7 +23,7 @@ import os
 import ast
 
 
-class TestServer:
+class TestLicense:
 
     def test_pyfiles(self):
         files = []
