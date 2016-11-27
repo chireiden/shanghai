@@ -193,17 +193,24 @@ class TestEventDispatchers:
     def test_dispatch_eat(self, loop):
         logger = mock.Mock(Logger)
         dispatcher = event.EventDispatcher(logger=logger)
-        called = False
+        called = [False] * 3
 
         async def coroutinefunc():
-            nonlocal called
-            called = True
+            called[0] = True
+
+        async def coroutinefunc2():
+            called[1] = True
             return event.ReturnValue.EAT
 
-        dispatcher.register("name", coroutinefunc)
+        async def coroutinefunc3():
+            called[2] = True
+
+        dispatcher.register("name", coroutinefunc, event.Priority.DEFAULT + 1)
+        dispatcher.register("name", coroutinefunc2)
+        dispatcher.register("name", coroutinefunc3, event.Priority.DEFAULT - 1)
         result = loop.run_until_complete(dispatcher.dispatch("name"))
         assert result is event.ReturnValue.EAT
-        assert called
+        assert called == [True, True, False]
 
     def test_dispatch_exception(self, loop):
         logger = mock.Mock(Logger)
