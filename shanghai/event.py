@@ -4,7 +4,7 @@ from collections import namedtuple, defaultdict
 import functools
 import enum
 
-from .logging import get_default_logger, Logger
+from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
 
 NetworkEvent = namedtuple("NetworkEvent", "name value")
@@ -21,6 +21,13 @@ class NetworkEventName(str, enum.Enum):
 
 class GlobalEventName(str, enum.Enum):
     INIT_NETWORK_CTX = "init_network_context"
+
+
+class ReturnValue(enum.Enum):
+    EAT = True
+    NONE = None
+
+    _all = (EAT, NONE)
 
 
 class Priority(int, enum.Enum):
@@ -132,19 +139,41 @@ class EventDispatcher:
             return
 
         for priority, handlers in self.event_map[name]:
-            # TODO prolly want to wrap this behind self.logger.isEnabledFor
-            # because it's very verbose
-            self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
-                               .format(name, priority, {repr_func(func) for func in handlers}))
+            # Use isEnabledFor because this will be called often
+            is_ddebug = self.logger.isEnabledFor(LogLevels.DDEBUG)
+            if is_ddebug:  # pragma: nocover
+                self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
+                                   .format(name, priority, {repr_func(func) for func in handlers}))
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
 
-            self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
-                               .format(name, priority, tasks))
-            results = await asyncio.gather(*tasks)
+            if is_ddebug:  # pragma: nocover
+                self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
+                                   .format(name, priority, tasks))
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            self.logger.ddebug("Results from event event {!r} (priority {}): {}"
-                               .format(name, priority, results))
-            # TODO interpret results, handle exceptions
+            if is_ddebug:  # pragma: nocover
+                self.logger.ddebug("Results from event {!r} (priority {}): {}"
+                                   .format(name, priority, results))
+
+            eaten = False
+            for handler, task, result in zip(handlers, tasks, results):
+                if isinstance(result, Exception):
+                    self.logger.exception("Exception in event handler {!r} for event {!r} "
+                                          "(priority {}):"
+                                          .format(handler, name, priority),
+                                          exc_info=result)
+
+                elif result is ReturnValue.EAT:
+                    self.logger.debug("Eating event {!r} at priority {} at the request of {}"
+                                      .format(name, priority, handler))
+                    eaten = True
+                elif result not in ReturnValue._all.value:
+                    self.logger.warning("Received unrecognized return value from {} "
+                                        "for event {!r} (priority {}): {!r}"
+                                        .format(handler, name, priority, result))
+
+            if eaten:
+                return ReturnValue.EAT
 
 
 class GlobalEventDispatcher(EventDispatcher):

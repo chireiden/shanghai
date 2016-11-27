@@ -5,6 +5,7 @@ from unittest import mock
 import pytest
 
 from shanghai import event
+from shanghai.logging import Logger
 
 
 @pytest.fixture
@@ -111,7 +112,7 @@ class TestPrioritizedSetList:
 class TestEventDispatchers:
 
     @pytest.fixture
-    def dispatcher(self,):
+    def dispatcher(self):
         return event.EventDispatcher()
 
     def test_register(self, dispatcher):
@@ -187,6 +188,60 @@ class TestEventDispatchers:
         dispatcher.register("name", coroutinefunc)
         loop.run_until_complete(dispatcher.dispatch(evt))
 
+        assert called
+
+    def test_dispatch_eat(self, loop):
+        logger = mock.Mock(Logger)
+        dispatcher = event.EventDispatcher(logger=logger)
+        called = [False] * 3
+
+        async def coroutinefunc():
+            called[0] = True
+
+        async def coroutinefunc2():
+            called[1] = True
+            return event.ReturnValue.EAT
+
+        async def coroutinefunc3():
+            called[2] = True
+
+        dispatcher.register("name", coroutinefunc, event.Priority.DEFAULT + 1)
+        dispatcher.register("name", coroutinefunc2)
+        dispatcher.register("name", coroutinefunc3, event.Priority.DEFAULT - 1)
+        result = loop.run_until_complete(dispatcher.dispatch("name"))
+        assert result is event.ReturnValue.EAT
+        assert called == [True, True, False]
+
+    def test_dispatch_exception(self, loop):
+        logger = mock.Mock(Logger)
+        dispatcher = event.EventDispatcher(logger=logger)
+        called = False
+
+        async def coroutinefunc():
+            nonlocal called
+            called = True
+            raise ValueError("yeah")
+
+        dispatcher.register("name", coroutinefunc)
+        assert not logger.exception.called
+        loop.run_until_complete(dispatcher.dispatch("name"))
+        assert logger.exception.call_count == 1
+        assert called
+
+    def test_dispatch_unknown_return(self, loop):
+        logger = mock.Mock(Logger)
+        dispatcher = event.EventDispatcher(logger=logger)
+        called = False
+
+        async def coroutinefunc():
+            nonlocal called
+            called = True
+            return "some arbitrary value"
+
+        dispatcher.register("name", coroutinefunc)
+        assert not logger.warning.called
+        loop.run_until_complete(dispatcher.dispatch("name"))
+        assert logger.warning.call_count == 1
         assert called
 
 
