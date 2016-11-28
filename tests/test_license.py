@@ -1,26 +1,23 @@
-"""
-Shanghai - Multiserver Asyncio IRC Bot
-Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
-Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
-
-This file is part of Shanghai.
-
-Shanghai is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-Shanghai is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
-"""
+# Shanghai - Multiserver Asyncio IRC Bot
+# Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
+# Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
+#
+# This file is part of Shanghai.
+#
+# Shanghai is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Shanghai is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import ast
 
 
 class TestLicense:
@@ -40,17 +37,22 @@ class TestLicense:
                 files.append(fullpath)
 
         for path in files:
+            head_comments = []
             with open(path, 'r', encoding='utf-8') as f:
-                tree = ast.parse(f.read())
-            assert tree.body, 'Empty source file'
-            assert isinstance(tree.body[0], ast.Expr), \
-                'Excepected doc string at beginning of file {}.'.format(path)
-            assert isinstance(tree.body[0].value, ast.Str),\
-                'Excepected doc string at beginning of file {}.'.format(path)
+                for line in f:
+                    if line.startswith('#'):
+                        head_comments.append(line.strip())
+                    else:
+                        break
 
-            own_doc = self._clean_license(__doc__)
-            file_doc = self._clean_license(tree.body[0].value.s)
-            assert own_doc == file_doc, 'License header of file {!r} seems incorrect.'.format(path)
+            assert len(head_comments) > 0,\
+                'Missing GPL Notice in {!r}'.format(path)
+            assert head_comments[0] == '# Shanghai - Multiserver Asyncio IRC Bot', \
+                'Missing program name in {!r}'.format(path)
+            assert '# This file is part of Shanghai.' in head_comments, \
+                'Missing "This file is part of Shanghai" in {!r}'.format(path)
+            assert any(line.startswith('# Copyright © ') for line in head_comments), \
+                'Missing copyright notice in {!r}'.format(path)
 
     @staticmethod
     def _clean_license(docstring):
