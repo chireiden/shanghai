@@ -3,7 +3,7 @@ from shanghai.event import GlobalEventName, global_event
 from shanghai.irc import Message
 from shanghai.network import NetworkContext
 
-from shanghai.core_plugins.message import MessageEventDispatcher
+from .message import MessageEventDispatcher
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.0.2'
