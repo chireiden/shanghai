@@ -36,11 +36,19 @@ class ShadowAttributesMixin:
 
     def set_attribute(self, name: str, value=None):
         """Allows to modify added attributes to an object."""
+        if name in self.__dict__:  # cannot use hasattr because that would call __getattr__
+            raise KeyError("")
         if name not in self._added_attributes:
             raise KeyError("Attribute '{}' is not defined".format(name))
         self._added_attributes[name] = value
 
-    def add_method(self, name_or_function: Union[str, Callable], function: callable = None):
+    def has_attribute(self, name: str, value=None):
+        """Check if an attribute exists already."""
+        if name not in self._added_attributes:
+            raise KeyError("Attribute '{}' is not defined".format(name))
+        self._added_attributes[name] = value
+
+    def add_method(self, name_or_function: Union[str, Callable], function: Callable = None):
         """Allows to add methods to an object.
 
         Added functions will be called with an implicit `self` argment,
@@ -49,6 +57,8 @@ class ShadowAttributesMixin:
         Also functions as a decorator and infers the attribute name from the function name.
         """
         if callable(name_or_function):
+            if callable(function):
+                raise ValueError("May only provide one callable")
             function = name_or_function
             name = function.__name__
         elif not callable(function):
