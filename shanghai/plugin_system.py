@@ -84,6 +84,8 @@ class PluginSystem:
             raise ValueError(
                 'Invalid plugin name. {!r} is a built in keyword.'.format(identifier))
 
+        module_name = 'shanghai.{}.{}'.format(self.namespace, identifier)
+
         if dependency_path is None:
             dependency_path = []
         if identifier in self.plugin_registry:
@@ -96,7 +98,7 @@ class PluginSystem:
             except OSError:
                 pass
             else:
-                plugin = self._load_plugin_as_module(module_path, identifier,
+                plugin = self._load_plugin_as_module(module_path, identifier, module_name,
                                                      dependency_path=dependency_path)
                 break
         else:  # I always wanted to use this at least once
@@ -121,7 +123,8 @@ class PluginSystem:
             return module_path
         raise OSError('Error trying to load {!r}'.format(str(path)))
 
-    def _load_plugin_as_module(self, path: pathlib.Path, identifier, *, dependency_path):
+    def _load_plugin_as_module(self, path: pathlib.Path, identifier, module_name, *,
+                               dependency_path):
         info = self._get_plugin_info(path, identifier)
         # TODO info['conflicts']
         for dependency in info['depends']:
@@ -135,7 +138,7 @@ class PluginSystem:
                              'as dependency of', dependency_path)
         else:
             self.logger.info('Loading plugin', identifier)
-        spec = importlib.util.spec_from_file_location(identifier, str(path))
+        spec = importlib.util.spec_from_file_location(module_name, str(path))
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
