@@ -10,8 +10,8 @@ class Options:
     """A simple case insensitive mapping of 005 RPL_ISUPPORT reply."""
     _fields = ('_options',)
 
-    def __init__(self):
-        self._options = {}
+    def __init__(self, **kwargs):
+        self._options = kwargs
 
     def __setitem__(self, key, value):
         self._options[key.lower()] = value
