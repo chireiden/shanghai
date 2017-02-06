@@ -20,7 +20,7 @@ class Plugin:
         self.logger = get_logger('plugin', info['identifier'])
         self.info = info
         self.module = module
-        self.module_name = f'shanghai.{namespace}.{info["identifier"]}'
+        self.module_name = f'{__package__}.{namespace}.{info["identifier"]}'
 
     def __repr__(self):
         return (f"<Plugin {self.module_name}:"
@@ -58,8 +58,8 @@ class PluginSystem:
                              f" {namespace!r} is a built-in keyword.")
 
         self.namespace = namespace
-        setattr(sys.modules['shanghai'], namespace, self)
-        sys.modules[f'shanghai.{namespace}'] = self
+        setattr(sys.modules[__package__], namespace, self)
+        sys.modules[f'{__package__}.{namespace}'] = self
 
         if is_core:
             # just search in one single path
@@ -82,7 +82,7 @@ class PluginSystem:
         if keyword.iskeyword(identifier):
             raise ValueError(f"Invalid plugin name. {identifier!r} is a built-in keyword.")
 
-        module_name = f'shanghai.{self.namespace}.{identifier}'
+        module_name = f'{__package__}.{self.namespace}.{identifier}'
 
         if dependency_path is None:
             dependency_path = []
@@ -107,7 +107,7 @@ class PluginSystem:
 
         # add to registry
         self.plugin_registry[identifier] = plugin
-        module_name = f'shanghai.{self.namespace}.{identifier}'
+        module_name = f'{__package__}.{self.namespace}.{identifier}'
         sys.modules[module_name] = plugin.module
         self.logger.debug(f"Setting sys.modules[{module_name!r}] to {plugin.module}")
         return plugin
