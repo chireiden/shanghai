@@ -24,6 +24,7 @@ class LogLevels(int, Enum):
     DDEBUG = 5
     NOTSET = logging.NOTSET
 
+
 logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
 
 
@@ -196,6 +197,7 @@ def get_logger(context, name, config=None, open_msg=False):
         logger.addHandler(stream_handler)
 
     return logger
+
 
 # Disable logging for the 'default' default logger
 _default_logger = get_logger('logging', 'default',
