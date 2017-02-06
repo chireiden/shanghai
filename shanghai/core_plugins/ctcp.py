@@ -13,6 +13,7 @@ __plugin_depends__ = ['message']
 
 
 class CtcpMessage(Message):
+    # http://www.kvirc.net/doc/doc_ctcp_handling.html
 
     def __repr__(self):
         return '<CTCP command={!r} params={!r}>'.format(self.command, self.params)
