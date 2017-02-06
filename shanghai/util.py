@@ -44,9 +44,8 @@ class ShadowAttributesMixin:
 
     def has_attribute(self, name: str, value=None):
         """Check if an attribute exists already."""
-        if name not in self._added_attributes:
-            raise KeyError("Attribute '{}' is not defined".format(name))
-        self._added_attributes[name] = value
+        # TODO test how hasattr performs with our __getattr__
+        return name in self.__dict__ or name in self._added_attributes
 
     def add_method(self, name_or_function: Union[str, Callable], function: Callable = None):
         """Allows to add methods to an object.
