@@ -7,7 +7,7 @@
 astroid==1.4.8            # via pylint
 click==6.6                # via pip-tools
 colorama==0.3.7
-coverage==4.2
+coverage==4.3.4
 first==2.0.1              # via pip-tools
 flake8==3.0.4
 fullqualname==0.1.0
