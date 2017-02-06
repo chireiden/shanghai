@@ -37,7 +37,7 @@ class ShadowAttributesMixin:
     def set_attribute(self, name: str, value=None):
         """Allows to modify added attributes to an object."""
         if name in self.__dict__:  # cannot use hasattr because that would call __getattr__
-            raise KeyError("")
+            raise KeyError(name)
         if name not in self._added_attributes:
             raise KeyError("Attribute '{}' is not defined".format(name))
         self._added_attributes[name] = value
