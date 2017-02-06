@@ -58,7 +58,7 @@ class PluginSystem:
                              f" {namespace!r} is a built-in keyword.")
 
         self.namespace = namespace
-        sys.modules['shanghai'].plugins = self
+        setattr(sys.modules['shanghai'], namespace, self)
         sys.modules[f'shanghai.{namespace}'] = self
 
         if is_core:
