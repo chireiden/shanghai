@@ -162,15 +162,15 @@ class NetworkConfiguration(FallbackConfiguration):
     def _require_keys(self, required_keys):
         missing_keys = sorted(key for key in required_keys if key not in self)
         if missing_keys:
-            raise ConfigurationError(f"Network {self.name!r} is missing the following options: "
-                                     f"{', '.join(missing_keys)}")
+            raise ConfigurationError(f"Network {self.name!r} is missing the following options:"
+                                     f" {', '.join(missing_keys)}")
 
     def __repr__(self):
         mapping = self.mapping
         if len(mapping) > 5:
             mapping = "{...}"
-        return (f"{type(self).__name__}({self.name!r}, {mapping}, "
-                f"*fallback_configs={self.fallback_configs!r})")
+        return (f"{type(self).__name__}({self.name!r}, {mapping},"
+                f" *fallback_configs={self.fallback_configs!r})")
 
 
 class ShanghaiConfiguration(Configuration):

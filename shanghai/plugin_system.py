@@ -23,8 +23,8 @@ class Plugin:
         self.module_name = f'shanghai.{namespace}.{info["identifier"]}'
 
     def __repr__(self):
-        return (f"<Plugin {self.module_name}: "
-                f"{self.info.name} {self.info.version} - {self.info.description}>")
+        return (f"<Plugin {self.module_name}:"
+                f" {self.info.name} {self.info.version} - {self.info.description}>")
 
 
 class PluginSystem:
@@ -51,11 +51,11 @@ class PluginSystem:
 
     def __init__(self, namespace, is_core=False):
         if not namespace.isidentifier():
-            raise ValueError("Invalid plugin namespace. "
-                             f"{namespace!r} contains invalid symbol(s).")
+            raise ValueError("Invalid plugin namespace."
+                             f" {namespace!r} contains invalid symbol(s).")
         if keyword.iskeyword(namespace):
-            raise ValueError("Invalid plugin namespace. "
-                             f"{namespace!r} is a built-in keyword.")
+            raise ValueError("Invalid plugin namespace."
+                             f" {namespace!r} is a built-in keyword.")
 
         self.namespace = namespace
         sys.modules['shanghai'].plugins = self
@@ -99,10 +99,11 @@ class PluginSystem:
                 plugin = self._load_plugin_as_module(module_path, identifier, module_name,
                                                      dependency_path=dependency_path)
                 break
-        else:  # I always wanted to use this at least once
+        else:
             raise FileNotFoundError(
-                f"Could not find plugin {identifier!r} in any of the search \tpaths:\n  "
-                f"{'\n  '.join(map(str, self.plugin_search_paths))}")
+                f"Could not find plugin {identifier!r} in any of the search \tpaths:"
+                + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
+            )
 
         # add to registry
         self.plugin_registry[identifier] = plugin
@@ -182,8 +183,8 @@ class PluginSystem:
                 value = []
                 for element in listing.elts:
                     if not isinstance(element, ast.Str):
-                        raise TypeError(f"Plugin {identifier}: {target.id} must be a list/tuple "
-                                        "and must only contain strings.")
+                        raise TypeError(f"Plugin {identifier}: {target.id} must be a list/tuple"
+                                        " and must only contain strings.")
                     value.append(element.s)
             else:
                 if not isinstance(statement.value, ast.Str):

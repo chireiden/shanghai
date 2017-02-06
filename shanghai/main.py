@@ -126,8 +126,8 @@ def main():
         task = asyncio.wait(network_tasks, loop=loop, timeout=5)
         done, pending = loop.run_until_complete(task)
         if pending:
-            default_logger.error("The following tasks didn't terminate within the set "
-                                 "timeout: %s", pending)
+            default_logger.error("The following tasks didn't terminate within the set"
+                                 " timeout: %s", pending)
     else:
         default_logger.info("All network tasks terminated")
 
