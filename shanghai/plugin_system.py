@@ -24,7 +24,7 @@ class Plugin:
 
     def __repr__(self):
         return (f"<Plugin {self.module_name}:"
-                f" {self.info.name} {self.info.version} - {self.info.description}>")
+                f" {self.info['name']} {self.info['version']} - {self.info['description']}>")
 
 
 class PluginSystem:
