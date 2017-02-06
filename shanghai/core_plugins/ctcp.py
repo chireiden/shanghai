@@ -16,7 +16,7 @@ class CtcpMessage(Message):
     # http://www.kvirc.net/doc/doc_ctcp_handling.html
 
     def __repr__(self):
-        return '<CTCP command={!r} params={!r}>'.format(self.command, self.params)
+        return f"<CTCP command={self.command!r} params={self.params!r}>"
 
     @classmethod
     def from_message(cls, msg: Message):
@@ -41,14 +41,14 @@ class CtcpMessage(Message):
 def send_ctcp(ctx: NetworkContext, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
-    text = '\x01{}{}\x01'.format(command, text)
+    text = f"\x01{command}{text}\x01"
     return ctx.send_msg(target, text)
 
 
 def send_ctcp_reply(ctx: NetworkContext, target: str, command: str, text: str = None):
     if text:
         text = ' ' + text
-    text = '\x01{}{}\x01'.format(command, text)
+    text = f"\x01{command}{text}\x01"
     return ctx.send_notice(target, text)
 
 

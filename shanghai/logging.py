@@ -152,7 +152,7 @@ def get_logger(context, name, config=None, open_msg=False):
     logging.setLoggerClass(Logger)
     # use a hashed version to avoid it containing dots.
     hashed_name = hashlib.sha256(name.lower().encode('utf-8')).hexdigest()[:12]
-    logger = logging.getLogger('{}.{}'.format(context.lower(), hashed_name))
+    logger = logging.getLogger(f'{context.lower()}.{hashed_name}')
 
     # TODO cache timezone
     tzname = os.environ.get('TZ', None)
@@ -181,7 +181,8 @@ def get_logger(context, name, config=None, open_msg=False):
         # TODO use rotating file handler
         file_handler = FileHandler(
             'logs/{context}-{name}-{date:%Y-%m}.log'
-            .format(**name_attributes))
+            .format(**name_attributes)
+        )
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
@@ -200,5 +201,4 @@ def get_logger(context, name, config=None, open_msg=False):
 
 
 # Disable logging for the 'default' default logger
-_default_logger = get_logger('logging', 'default',
-                             Configuration({'logging': {'disable': True}}))
+_default_logger = get_logger('logging', 'default', Configuration({'logging': {'disable': True}}))

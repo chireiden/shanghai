@@ -30,7 +30,7 @@ class Connection:
         self.writer.close()
 
     async def run(self):
-        self.logger.info("connecting to {}...".format(self.server))
+        self.logger.info(f"connecting to {self.server}...")
         reader, writer = await asyncio.open_connection(
             self.server.host, self.server.port, ssl=self.server.ssl, loop=self.loop
         )
@@ -48,7 +48,7 @@ class Connection:
         except asyncio.CancelledError:
             self.logger.info("Connection.run was cancelled")
         except ConnectionResetError as e:
-            self.logger.warning("connection was reset; {}".format(e))
+            self.logger.warning(f"connection was reset; {e}")
         finally:
             self.close()
             await self.queue.put(NetworkEvent('disconnected', None))

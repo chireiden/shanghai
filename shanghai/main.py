@@ -109,7 +109,7 @@ def main():
         nw_name, irc_line = split
         if nw_name and irc_line:
             if nw_name not in bot.networks:
-                print("network '{}' not found".format(nw_name))
+                print(f"network {nw_name!r} not found")
                 return
             network = bot.networks[nw_name]['network']
             network._context.send_line(irc_line)
@@ -136,7 +136,7 @@ def main():
             try:
                 task.result()  # cause exceptions to be raised
             except:
-                default_logger.exception("Network task {!r} errored".format(task))
+                default_logger.exception(f"Network task {task!r} errored")
 
     if not stdin_reader_task.done():
         stdin_reader_task.cancel()

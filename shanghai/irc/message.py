@@ -31,12 +31,12 @@ class Prefix(namedtuple("_Prefix", "name ident host")):
         return cls(name, ident, host)
 
     def __str__(self) -> str:
-        fmt = "{s.name}"
+        ret = self.name
         if self.host:
             if self.ident:
-                fmt += "!{s.ident}"
-            fmt += "@{s.host}"
-        return fmt.format(s=self)
+                ret += f"!{self.ident}"
+            ret += f"@{self.host}"
+        return ret
 
 
 class Message:
@@ -107,8 +107,7 @@ class Message:
             try:
                 command = ServerReply(command)
             except ValueError:
-                get_default_logger().warning("unknown server reply code {}; {}"
-                                             .format(command, raw_line))
+                get_default_logger().warning(f"unknown server reply code {command}; {raw_line}")
 
         params = []
         if line:
@@ -127,7 +126,5 @@ class Message:
                    raw_line=raw_line)
 
     def __repr__(self) -> str:
-        return (
-            '{s.__class__.__name__}({s.command!r}, prefix={s.prefix!r},'
-            ' params={s.params!r}, tags={s.tags!r})'.format(s=self)
-        )
+        return (f"{self.__class__.__name__}({self.command!r}, prefix={self.prefix!r},"
+                f" params={self.params!r}, tags={self.tags!r})")
