@@ -9,7 +9,7 @@ classifiers = [
     'Environment :: Console',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: ' + lic,
-    'Programming Language :: Python :: 3.5',
+    'Programming Language :: Python :: 3.6',
 ]
 
 with open("requirements.in") as f:
