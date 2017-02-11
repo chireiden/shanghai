@@ -12,6 +12,9 @@ classifiers = [
     'Programming Language :: Python :: 3.5',
 ]
 
+with open("requirements.in") as f:
+    requirements = f.read().split()
+
 
 setup(
     # Package information
@@ -29,10 +32,8 @@ setup(
 
     # Requirements
     setup_requires=['pip'],
-    install_requires=[
-        'ruamel.yaml',
-    ],
-    tests_require=['pytest', 'flake8'],
+    install_requires=requirements,
+    tests_require=['tox'],
 
     # Scripts and execution
     packages=['shanghai'],
