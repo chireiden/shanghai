@@ -37,11 +37,11 @@ class Plugin:
         self.logger = get_logger('plugin', info['identifier'])
         self.info = info
         self.module = module
-        self.module_name = 'shanghai.{}.{}'.format(namespace, info['identifier'])
+        self.module_name = f'{__package__}.{namespace}.{info["identifier"]}'
 
     def __repr__(self):
-        return '<Plugin {module_name}: {name} {version} - {description}>'.format(
-            module_name=self.module_name, **self.info)
+        return (f"<Plugin {self.module_name}:"
+                f" {self.info['name']} {self.info['version']} - {self.info['description']}>")
 
 
 class PluginSystem:
@@ -68,15 +68,15 @@ class PluginSystem:
 
     def __init__(self, namespace, is_core=False):
         if not namespace.isidentifier():
-            raise ValueError(
-                'Invalid plugin namespace. {!r} contains invalid symbol(s).'.format(namespace))
+            raise ValueError("Invalid plugin namespace."
+                             f" {namespace!r} contains invalid symbol(s).")
         if keyword.iskeyword(namespace):
-            raise ValueError(
-                'Invalid plugin namespace. {!r} is a built in keyword.'.format(namespace))
+            raise ValueError("Invalid plugin namespace."
+                             f" {namespace!r} is a built-in keyword.")
 
         self.namespace = namespace
-        sys.modules['shanghai'].plugins = self
-        sys.modules['shanghai.{}'.format(namespace)] = self
+        setattr(sys.modules[__package__], namespace, self)
+        sys.modules[f'{__package__}.{namespace}'] = self
 
         if is_core:
             # just search in one single path
@@ -95,13 +95,11 @@ class PluginSystem:
 
     def load_plugin(self, identifier, *, dependency_path=None, is_core=False):
         if not identifier.isidentifier():
-            raise ValueError(
-                'Invalid plugin name. {!r} contains invalid symbol(s).'.format(identifier))
+            raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
         if keyword.iskeyword(identifier):
-            raise ValueError(
-                'Invalid plugin name. {!r} is a built in keyword.'.format(identifier))
+            raise ValueError(f"Invalid plugin name. {identifier!r} is a built-in keyword.")
 
-        module_name = 'shanghai.{}.{}'.format(self.namespace, identifier)
+        module_name = f'{__package__}.{self.namespace}.{identifier}'
 
         if dependency_path is None:
             dependency_path = []
@@ -118,27 +116,28 @@ class PluginSystem:
                 plugin = self._load_plugin_as_module(module_path, identifier, module_name,
                                                      dependency_path=dependency_path)
                 break
-        else:  # I always wanted to use this at least once
+        else:
             raise FileNotFoundError(
-                'Could not find plugin {!r} in any of the search paths:\n{}'
-                .format(identifier, '\n'.join(str(p) for p in self.plugin_search_paths)))
+                f"Could not find plugin {identifier!r} in any of the search \tpaths:"
+                + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
+            )
 
         # add to registry
         self.plugin_registry[identifier] = plugin
-        module_name = 'shanghai.{}.{}'.format(self.namespace, identifier)
+        module_name = f'{__package__}.{self.namespace}.{identifier}'
         sys.modules[module_name] = plugin.module
-        self.logger.debug("Setting sys.modules[{!r}] to {}".format(module_name, plugin.module))
+        self.logger.debug(f"Setting sys.modules[{module_name!r}] to {plugin.module}")
         return plugin
 
     @classmethod
     def _find_module_path(cls, search_path: pathlib.Path, identifier) -> pathlib.Path:
         path = pathlib.Path(search_path, identifier)
-        module_path = path.with_suffix('.py')
+        module_path = path.with_suffix(".py")
         if not module_path.exists():
-            raise FileNotFoundError('No such file {!r}'.format(str(module_path)))
+            raise FileNotFoundError(f"No such file {str(module_path)!r}")
         if module_path.is_file():
             return module_path
-        raise OSError('Error trying to load {!r}'.format(str(path)))
+        raise OSError(f"Error trying to load {str(path)!r}")
 
     def _load_plugin_as_module(self, path: pathlib.Path, identifier, module_name, *,
                                dependency_path):
@@ -146,20 +145,21 @@ class PluginSystem:
         # TODO info['conflicts']
         for dependency in info['depends']:
             if dependency in dependency_path:
-                raise CyclicDependency('Cyclic dependency detected: {}'
-                                       .format(' -> '.join([identifier] + dependency_path)))
+                raise CyclicDependency(
+                    f"Cyclic dependency detected: {' -> '.join([identifier] + dependency_path)}"
+                )
             self.load_plugin(dependency, dependency_path=dependency_path + [identifier])
 
         if dependency_path:
-            self.logger.info('Loading plugin', identifier,
-                             'as dependency of', dependency_path)
+            self.logger.info("Loading plugin", identifier,
+                             "as dependency of", dependency_path)
         else:
-            self.logger.info('Loading plugin', identifier)
+            self.logger.info("Loading plugin", identifier)
         spec = importlib.util.spec_from_file_location(module_name, str(path))
 
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        self.logger.info('Found plugin in', module.__file__)
+        self.logger.info("Found plugin in", module.__file__)
 
         plugin = self.plugin_factory(info, module, self.namespace)
         self.logger.info("Loaded plugin", plugin)
@@ -196,18 +196,16 @@ class PluginSystem:
             if _id in ('depends', 'conflicts'):
                 listing = statement.value
                 if not isinstance(listing, (ast.List, ast.Tuple)):
-                    raise TypeError('Plugin {}: {} must be a list or a tuple.'
-                                    .format(identifier, target.id))
+                    raise TypeError(f"Plugin {identifier}: {target.id} must be a list or a tuple.")
                 value = []
                 for element in listing.elts:
                     if not isinstance(element, ast.Str):
-                        raise TypeError('Plugin {}: {} must be a list/tuple and must only'
-                                        ' contain strings.'.format(identifier, target.id))
+                        raise TypeError(f"Plugin {identifier}: {target.id} must be a list/tuple"
+                                        " and must only contain strings.")
                     value.append(element.s)
             else:
                 if not isinstance(statement.value, ast.Str):
-                    raise TypeError('Plugin {}: {} can only be a string.'
-                                    .format(identifier, target.id))
+                    raise TypeError(f"Plugin {identifier}: {target.id} can only be a string")
                 value = statement.value.s
 
             if _id in ignore_ids:
@@ -221,7 +219,7 @@ class PluginSystem:
 
         if required_ids:
             # TODO: Use better exception.
-            raise RuntimeError('Missing {} in {}'.format(
-                ', '.join('__plugin_{}__'.format(i) for i in required_ids), str(path)))
+            missing_str = ', '.join(f'__plugin_{i}__' for i in required_ids)
+            raise RuntimeError(f"Missing {missing_str} in {str(path)!r}")
 
         return info

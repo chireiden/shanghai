@@ -27,8 +27,8 @@ class Options:
     """A simple case insensitive mapping of 005 RPL_ISUPPORT reply."""
     _fields = ('_options',)
 
-    def __init__(self):
-        self._options = {}
+    def __init__(self, **kwargs):
+        self._options = kwargs
 
     def __setitem__(self, key, value):
         self._options[key.lower()] = value
@@ -46,11 +46,11 @@ class Options:
         return self._options[item.lower()]
 
     def __repr__(self):
-        text = '{}(\n'.format(self.__class__.__name__)
+        text_list = [f"{self.__class__.__name__}("]
         for key, value in sorted(self._options.items()):
-            text += '    {}={!r}\n'.format(key, value)
-        text += ')'
-        return text
+            text_list.append(f"    {key}={value!r},")
+        text_list.append(")")
+        return "\n".join(text_list)
 
     def extend_from_message(self, message: Message):
         assert message.command == ServerReply.RPL_ISUPPORT

@@ -99,7 +99,7 @@ class Network:
 
             # We didn't stop, so try to reconnect after a timeout
             seconds = 10 * retry
-            self.logger.info('Retry connecting in {} seconds'.format(seconds))
+            self.logger.info(f"Retry connecting in {seconds} seconds")
             await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
             self._reset()
 

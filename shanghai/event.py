@@ -53,6 +53,14 @@ class Priority(int, enum.Enum):
     POST_CORE = -5
     DEFAULT = -10
 
+    @classmethod
+    def lookup(cls, priority: int):
+        for k, v in cls.__members__.items():
+            if priority == v:
+                return v
+        else:
+            return priority
+
 
 class _PrioritizedSetList:
 
@@ -66,7 +74,7 @@ class _PrioritizedSetList:
 
     def add(self, priority: int, obj):
         if obj in self:
-            raise ValueError("Object {!r} has already been added".format(obj))
+            raise ValueError(f"Object {obj!r} has already been added")
 
         i = -1
         for i, (prio, set_) in enumerate(self.list):
@@ -88,7 +96,7 @@ class _PrioritizedSetList:
                     del self.list[i]
                 return
         else:
-            raise ValueError("Object {!r} can not be found".format(obj))
+            raise ValueError(f"Object {obj!r} can not be found")
 
     def __iter__(self):
         return iter(self.list)
@@ -113,7 +121,7 @@ class EventDecorator:
     def __call__(self, name, priority=Priority.DEFAULT):
         if self.allowed_names:
             if name not in self.allowed_names:
-                raise ValueError("Unknown event name '{}'".format(name))
+                raise ValueError(f"Unknown event name {name!r}")
 
         def deco(coroutine):
             self.dispatcher.register(name, coroutine, priority)
@@ -137,57 +145,60 @@ class EventDispatcher:
         self.decorator = EventDecorator(self)
 
     def unregister(self, name: str, coroutine):
-        self.logger.ddebug("Unregistering event handler for event {!r}: {}"
-                           .format(name, coroutine))
+        self.logger.ddebug(f"Unregistering event handler for event {name!r}: {coroutine}")
         self.event_map[name].remove(coroutine)
 
     def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
-        self.logger.ddebug("Registering event handler for event {!r} (priority {}): {}"
-                           .format(name, priority, coroutine))
+        priority = Priority.lookup(priority)  # for pretty __repr__
+        self.logger.ddebug(f"Registering event handler for event {name!r} ({priority!r}):"
+                           f" {coroutine}")
         if not asyncio.iscoroutinefunction(coroutine):
             raise ValueError("callable must be a coroutine function (defined with `async def`)")
 
         self.event_map[name].add(priority, coroutine)
 
     async def dispatch(self, name: str, *args):
-        self.logger.ddebug("Dispatching event {!r} with arguments {}".format(name, args))
+        self.logger.ddebug(f"Dispatching event {name!r} with arguments {args}")
         if name not in self.event_map:
-            self.logger.ddebug("No event handlers for event {!r}".format(name))
+            self.logger.ddebug(f"No event handlers for event {name!r}")
             return
 
         for priority, handlers in self.event_map[name]:
+            priority = Priority.lookup(priority)  # for pretty __repr__
+
             # Use isEnabledFor because this will be called often
             is_ddebug = self.logger.isEnabledFor(LogLevels.DDEBUG)
             if is_ddebug:  # pragma: nocover
-                self.logger.ddebug("Creating tasks for event {!r} (priority {}), from {}"
-                                   .format(name, priority, {repr_func(func) for func in handlers}))
+                self.logger.ddebug(f"Creating tasks for event {name!r} ({priority!r}),"
+                                   f" from {set(repr_func(func) for func in handlers)}")
             tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
 
             if is_ddebug:  # pragma: nocover
-                self.logger.ddebug("Starting tasks for event {!r} (priority {}); tasks: {}"
-                                   .format(name, priority, tasks))
+                self.logger.ddebug(f"Starting tasks for event {name!r} ({priority!r});"
+                                   f" tasks: {tasks}")
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             if is_ddebug:  # pragma: nocover
-                self.logger.ddebug("Results from event {!r} (priority {}): {}"
-                                   .format(name, priority, results))
+                self.logger.ddebug(f"Results from event {name!r} ({priority!r}): {results}")
 
             eaten = False
             for handler, task, result in zip(handlers, tasks, results):
                 if isinstance(result, Exception):
-                    self.logger.exception("Exception in event handler {!r} for event {!r} "
-                                          "(priority {}):"
-                                          .format(repr_func(handler), name, priority),
-                                          exc_info=result)
+                    self.logger.exception(
+                        f"Exception in event handler {repr_func(handler)!r} for event {name!r}"
+                        f" ({priority!r}):",
+                        exc_info=result
+                    )
 
                 elif result is ReturnValue.EAT:
-                    self.logger.debug("Eating event {!r} at priority {} at the request of {}"
-                                      .format(name, priority, repr_func(handler)))
+                    self.logger.debug(f"Eating event {name!r} at priority {priority!r}"
+                                      f" at the request of {repr_func(handler)}")
                     eaten = True
                 elif result not in ReturnValue._all.value:
-                    self.logger.warning("Received unrecognized return value from {} "
-                                        "for event {!r} (priority {}): {!r}"
-                                        .format(repr_func(handler), name, priority, result))
+                    self.logger.warning(
+                        f"Received unrecognized return value from {repr_func(handler)}"
+                        f" for event {name!r} ({priority!r}): {result!r}"
+                    )
 
             if eaten:
                 return ReturnValue.EAT

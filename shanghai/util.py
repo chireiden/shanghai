@@ -48,7 +48,7 @@ class ShadowAttributesMixin:
         For adding methods, use add_method.
         """
         if hasattr(self, name) or name in self._added_attributes:
-            raise KeyError("Attribute '{}' is already defined".format(name))
+            raise KeyError(f"Attribute {name!r} is already defined")
         self._added_attributes[name] = value
 
     def set_attribute(self, name: str, value=None):
@@ -56,7 +56,7 @@ class ShadowAttributesMixin:
         if name in self.__dict__:  # cannot use hasattr because that would call __getattr__
             raise KeyError(name)
         if name not in self._added_attributes:
-            raise KeyError("Attribute '{}' is not defined".format(name))
+            raise KeyError(f"Attribute {name!r} is not defined")
         self._added_attributes[name] = value
 
     def has_attribute(self, name: str, value=None):
@@ -89,17 +89,17 @@ class ShadowAttributesMixin:
     def remove_attribute(self, name: str):
         """Allows for plugins to remove their added attributes to the network object."""
         if name not in self._added_attributes:
-            raise KeyError("Attribute '{}' is not defined".format(name))
+            raise KeyError(f"Attribute {name!r} is not defined")
         del self._added_attributes[name]
 
     def __getattr__(self, name):
         if name in self._added_attributes:
             return self._added_attributes[name]
         else:
-            raise AttributeError("{!r} has no attribute {!r}".format(self, name))
+            raise AttributeError(f"{self!r} has no attribute {name!r}")
         #     super().__getattr__(name)
 
 
 def repr_func(func: callable) -> str:
     """Represent a function with its full qualname instead of just its name and an address."""
-    return "<{} {}>".format(type(func).__name__, fullqualname(func))
+    return f"<{type(func).__name__} {fullqualname(func)}>"

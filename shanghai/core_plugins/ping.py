@@ -36,7 +36,7 @@ def ms_time() -> int:
 
 async def pinger(ctx: NetworkContext, ping_evt):
     while True:
-        ctx.send_cmd('PING', "LAG_{}".format(ms_time()))
+        ctx.send_cmd('PING', f"LAG_{ms_time()}")
         ping_evt.set()
         await asyncio.sleep(30)
 
@@ -78,7 +78,7 @@ async def init_context(ctx: NetworkContext):
                 ms = int(text[4:])
                 latency = ms_time() - ms
                 ctx.set_attribute('latency', latency)
-                ctx.logger.debug("latency: {:.3f}s".format(latency / 1000))
+                ctx.logger.debug(f"latency: {latency / 1000:.3f}s")
 
         @ctx.network_event.core(NetworkEventName.DISCONNECTED)
         async def on_disconnected(ctx: NetworkContext, _):

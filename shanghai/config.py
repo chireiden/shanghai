@@ -43,7 +43,7 @@ class Server(SimpleNamespace):
         return cls(host, port, ssl)
 
     def __str__(self):
-        return "{s.host}:{ssl}{s.port}".format(s=self, ssl="+" if self.ssl else "")
+        return f"{self.host}:{'+' if self.ssl else ''}{self.port}"
 
 
 class Configuration:
@@ -80,16 +80,16 @@ class Configuration:
 
         for i, leaf in enumerate(leafs):
             if not isinstance(node, c_abc.Mapping):
-                raise KeyError("Element '{}' is not a mapping".format(".".join(leafs[:i])))
+                raise KeyError(f"Element {'.'.join(leafs[:i])!r} is not a mapping")
             if not leaf:
-                raise KeyError("Empty sub-key after '{}'".format(".".join(leafs[:i])))
+                raise KeyError(f"Empty sub-key after {'.'.join(leafs[:i])!r}")
             if leaf not in node:
                 break
             node = node[leaf]
         else:
             return node
 
-        raise KeyError("Cannot find '{}'".format(key))
+        raise KeyError(f"Cannot find '{key}'")
 
     def __contains__(self, key):
         obj = object()
@@ -104,7 +104,7 @@ class FallbackConfiguration(Configuration):
         super().__init__(mapping)
         # for fb_c in fallback_configs:
         #     if not isinstance(fb_c, Configuration):
-        #         raise ValueError("{!r} is not an instances of {}".format(fb_c, Configuration))
+        #         raise ValueError(f"{fb_c!r} is not an instance of {Configuration}")
         self.fallback_configs = fallback_configs
 
     def __getitem__(self, key):
@@ -120,7 +120,7 @@ class FallbackConfiguration(Configuration):
             if value is not obj:
                 return value
 
-        raise KeyError("Cannot find '{}'".format(key))
+        raise KeyError(f"Cannot find '{key}'")
 
     def __contains__(self, key):
         # if super().__contains__(key):
@@ -133,8 +133,7 @@ class FallbackConfiguration(Configuration):
         mapping = self.mapping
         if len(mapping) > 5:
             mapping = "{...}"
-        return ("{}({}, *fallback_configs={!r})"
-                .format(type(self).__name__, mapping, self.fallback_configs))
+        return f"{type(self).__name__}({mapping}, *fallback_configs={self.fallback_configs!r})"
 
 
 class NetworkConfiguration(FallbackConfiguration):
@@ -158,15 +157,15 @@ class NetworkConfiguration(FallbackConfiguration):
             # replace channel names 'foobar' with '#foobar'
             if not channel.startswith(tuple('#&+!')):
                 del mapping['channels'][channel]
-                mapping['channels']['#{}'.format(channel)] = channel_conf
+                mapping['channels'][f'#{channel}'] = channel_conf
 
     def _parse_servers(self, mapping):
         servers = []
         servers_conf = mapping.get('servers')
         if not servers_conf:
-            raise ConfigurationError("Network {!r} has no servers".format(self.name))
+            raise ConfigurationError(f"Network {self.name!r} has no servers")
         if not isinstance(servers_conf, list):
-            raise ConfigurationError("Servers of Network {!r} are not a list".format(self.name))
+            raise ConfigurationError(f"Servers of Network {self.name!r} are not a list")
         for server_conf in mapping.get('servers', ()):
             if isinstance(server_conf, str):
                 server = Server.from_string(server_conf)
@@ -180,15 +179,15 @@ class NetworkConfiguration(FallbackConfiguration):
     def _require_keys(self, required_keys):
         missing_keys = sorted(key for key in required_keys if key not in self)
         if missing_keys:
-            raise ConfigurationError('Network {!r} is missing the following options: {}'
-                                     .format(self.name, ', '.join(missing_keys)))
+            raise ConfigurationError(f"Network {self.name!r} is missing the following options:"
+                                     f" {', '.join(missing_keys)}")
 
     def __repr__(self):
         mapping = self.mapping
         if len(mapping) > 5:
             mapping = "{...}"
-        return ("{}({!r}, {}, *fallback_configs={!r})"
-                .format(type(self).__name__, self.name, mapping, self.fallback_configs))
+        return (f"{type(self).__name__}({self.name!r}, {mapping},"
+                f" *fallback_configs={self.fallback_configs!r})")
 
 
 class ShanghaiConfiguration(Configuration):

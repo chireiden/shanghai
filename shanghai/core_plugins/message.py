@@ -54,7 +54,7 @@ async def init_context(ctx):
     def send_cmd(self, command: str, *params: str):
         args = [command, *params]
         if ' ' in args[-1]:
-            args[-1] = ':{}'.format(args[-1])
+            args[-1] = f":{args[-1]}"
         ctx.send_line(' '.join(args))
 
     @ctx.add_method

@@ -259,8 +259,8 @@ class TestNetworkConfig():
         del test_yaml['realname']
         with pytest.raises(ConfigurationError) as excinfo:
             NetworkConfiguration("my_netw", test_yaml)
-        excinfo.match("Network ['\"]my_netw['\"] is missing the following options: "
-                      "nick, realname, user")
+        excinfo.match("Network ['\"]my_netw['\"] is missing the following options:"
+                      " nick, realname, user")
 
     def test_parse_servers(self, base_yaml):
         nw_c = NetworkConfiguration("my_netw", base_yaml)

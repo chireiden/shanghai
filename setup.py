@@ -26,8 +26,11 @@ classifiers = [
     'Environment :: Console',
     'Intended Audience :: Developers',
     'License :: OSI Approved :: ' + lic,
-    'Programming Language :: Python :: 3.5',
+    'Programming Language :: Python :: 3.6',
 ]
+
+with open("requirements.in") as f:
+    requirements = f.read().split()
 
 
 setup(
@@ -46,10 +49,8 @@ setup(
 
     # Requirements
     setup_requires=['pip'],
-    install_requires=[
-        'ruamel.yaml',
-    ],
-    tests_require=['pytest', 'flake8'],
+    install_requires=requirements,
+    tests_require=['tox'],
 
     # Scripts and execution
     packages=['shanghai'],
