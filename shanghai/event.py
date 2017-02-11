@@ -160,17 +160,17 @@ class EventDispatcher:
                 if isinstance(result, Exception):
                     self.logger.exception("Exception in event handler {!r} for event {!r} "
                                           "(priority {}):"
-                                          .format(handler, name, priority),
+                                          .format(repr_func(handler), name, priority),
                                           exc_info=result)
 
                 elif result is ReturnValue.EAT:
                     self.logger.debug("Eating event {!r} at priority {} at the request of {}"
-                                      .format(name, priority, handler))
+                                      .format(name, priority, repr_func(handler)))
                     eaten = True
                 elif result not in ReturnValue._all.value:
                     self.logger.warning("Received unrecognized return value from {} "
                                         "for event {!r} (priority {}): {!r}"
-                                        .format(handler, name, priority, result))
+                                        .format(repr_func(handler), name, priority, result))
 
             if eaten:
                 return ReturnValue.EAT

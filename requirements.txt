@@ -7,4 +7,4 @@
 colorama==0.3.7
 fullqualname==0.1.0
 pytz==2016.6.1
-ruamel.yaml==0.12.10
+ruamel.yaml==0.13.13

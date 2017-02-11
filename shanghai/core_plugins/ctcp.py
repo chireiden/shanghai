@@ -3,7 +3,7 @@ from shanghai.event import GlobalEventName, global_event
 from shanghai.irc import Message
 from shanghai.network import NetworkContext
 
-from shanghai.core_plugins.message import MessageEventDispatcher
+from .message import MessageEventDispatcher
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.0.2'
@@ -13,6 +13,7 @@ __plugin_depends__ = ['message']
 
 
 class CtcpMessage(Message):
+    # http://www.kvirc.net/doc/doc_ctcp_handling.html
 
     def __repr__(self):
         return '<CTCP command={!r} params={!r}>'.format(self.command, self.params)
@@ -65,7 +66,7 @@ async def init_context(ctx: NetworkContext):
     async def privmsg(ctx: NetworkContext, msg: Message):
         ctcp_msg = CtcpMessage.from_message(msg)
         if ctcp_msg:
-            await ctcp_event_dispatcher.dispatch(ctx, ctcp_msg)
+            await ctcp_event_dispatcher.dispatch(ctcp_msg)
 
     # example ctcp_event hook
     @ctx.ctcp_event('VERSION')
