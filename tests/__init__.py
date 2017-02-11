@@ -1,8 +1,7 @@
-# Shanghai - Multiserver Asyncio IRC Bot
 # Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
 # Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
 #
-# This file is part of Shanghai.
+# This file is part of Shanghai, an asynchronous multi-server IRC bot.
 #
 # Shanghai is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

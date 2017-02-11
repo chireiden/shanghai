@@ -1,8 +1,7 @@
-# Shanghai - Multiserver Asyncio IRC Bot
 # Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
 # Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
 #
-# This file is part of Shanghai.
+# This file is part of Shanghai, an asynchronous multi-server IRC bot.
 #
 # Shanghai is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -47,10 +46,8 @@ class TestLicense:
 
             assert len(head_comments) > 0,\
                 'Missing GPL Notice in {!r}'.format(path)
-            assert head_comments[0] == '# Shanghai - Multiserver Asyncio IRC Bot', \
-                'Missing program name in {!r}'.format(path)
-            assert '# This file is part of Shanghai.' in head_comments, \
-                'Missing "This file is part of Shanghai" in {!r}'.format(path)
+            assert '# This file is part of Shanghai, an asynchronous multi-server IRC bot.'\
+                in head_comments, 'Missing program name in {!r}'.format(path)
             assert any(line.startswith('# Copyright © ') for line in head_comments), \
                 'Missing copyright notice in {!r}'.format(path)
 
