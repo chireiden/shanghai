@@ -178,12 +178,12 @@ class PluginSystem:
 
             if _id in ('depends', 'conflicts'):
                 listing = statement.value
-                if not isinstance(listing, (ast.List, ast.Tuple)):
-                    raise TypeError(f"Plugin {identifier}: {target.id} must be a list or a tuple.")
+                if not isinstance(listing, ast.Tuple):
+                    raise TypeError(f"Plugin {identifier}: {target.id} must be a tuple.")
                 value = []
                 for element in listing.elts:
                     if not isinstance(element, ast.Str):
-                        raise TypeError(f"Plugin {identifier}: {target.id} must be a list/tuple"
+                        raise TypeError(f"Plugin {identifier}: {target.id} must be a tuple"
                                         " and must only contain strings.")
                     value.append(element.s)
             else:
