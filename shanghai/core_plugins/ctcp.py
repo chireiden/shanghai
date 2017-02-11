@@ -66,7 +66,7 @@ async def init_context(ctx: NetworkContext):
     async def privmsg(ctx: NetworkContext, msg: Message):
         ctcp_msg = CtcpMessage.from_message(msg)
         if ctcp_msg:
-            await ctcp_event_dispatcher.dispatch(ctx, ctcp_msg)
+            await ctcp_event_dispatcher.dispatch(ctcp_msg)
 
     # example ctcp_event hook
     @ctx.ctcp_event('VERSION')
