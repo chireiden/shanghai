@@ -96,8 +96,10 @@ class PluginSystem:
                 continue
             elif identifier in self.plugin_registry:
                 continue  # loaded as a dependency
-
-            plugin = self._load_plugin_as_module(module_path, identifier)
+            try:
+                plugin = self._load_plugin_as_module(module_path, identifier)
+            except Exception as e:
+                self.logger.exception(f"Unable to load plugin {identifier!r}: {e!s}")
             self._register_plugin(plugin)
 
     def load_plugin(self, identifier, *, dependency_path=(), is_core=False):
@@ -158,7 +160,7 @@ class PluginSystem:
         if dependency_path:
             self.logger.info(f"Loading plugin {identifier!r} as dependency of {dependency_path!r}")
         else:
-            self.logger.info("Loading plugin", identifier)
+            self.logger.info(f"Loading plugin {identifier!r}")
 
         module_name = f'{__package__}.{self.namespace}.{identifier}'
         spec = importlib.util.spec_from_file_location(module_name, str(path))
