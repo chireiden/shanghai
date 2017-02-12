@@ -78,6 +78,25 @@ class PluginSystem:
             return self.plugin_registry[item].module
         raise AttributeError(item)
 
+    def load_all_plugins(self):
+        plugins_to_load = {}
+
+        for search_path in self.plugin_search_paths:
+            for module_path in search_path.glob("*.py"):
+                identifier = module_path.stem
+                plugins_to_load.setdefault(identifier, module_path)
+
+        loaded_before = set(self.plugin_registry.keys())
+        for identifier, module_path in plugins_to_load.items():
+            if identifier in loaded_before:
+                self.logger.warn(f"Plugin {identifier!r} already exists")
+                continue
+            elif identifier in self.plugin_registry:
+                continue  # loaded as a dependency
+
+            plugin = self._load_plugin_as_module(module_path, identifier)
+            self._register_plugin(plugin)
+
     def load_plugin(self, identifier, *, dependency_path=(), is_core=False):
         if not identifier.isidentifier():
             raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
