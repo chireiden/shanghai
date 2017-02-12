@@ -20,7 +20,7 @@ import re
 import string
 
 from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
-from shanghai.network import NetworkContext
+from shanghai.network import ShadowAttributesMixin, NetworkContext
 from shanghai.irc.server_reply import ServerReply
 from .message import Message
 from shanghai.logging import get_logger, Logger
@@ -56,7 +56,7 @@ class Join(_Base):
         self.info = info if info is not None else {}
 
 
-class ChannelContext(NetworkContext):
+class ChannelContext(ShadowAttributesMixin):
 
     def __init__(self, network_context: NetworkContext, message: 'BaseMessage',
                  *, logger: Logger=None):
