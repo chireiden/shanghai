@@ -31,19 +31,19 @@ class Options:
         self._options = kwargs
 
     def __setitem__(self, key, value):
-        self._options[key.lower()] = value
+        self._options[key.upper()] = value
 
     def __setattr__(self, key, value):
         if key in self._fields:
             super().__setattr__(key, value)
         else:
-            self._options[key.lower()] = value
+            self._options[key.upper()] = value
 
     def __getitem__(self, item):
-        return self._options[item.lower()]
+        return self._options[item.upper()]
 
     def __getattr__(self, item):
-        return self._options[item.lower()]
+        return self._options[item.upper()]
 
     def __repr__(self):
         text_list = [f"{self.__class__.__name__}("]
