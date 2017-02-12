@@ -59,7 +59,7 @@ class ShadowAttributesMixin:
             raise KeyError(f"Attribute {name!r} is not defined")
         self._added_attributes[name] = value
 
-    def has_attribute(self, name: str, value=None):
+    def has_attribute(self, name: str):
         """Check if an attribute exists already."""
         # TODO test how hasattr performs with our __getattr__
         return name in self.__dict__ or name in self._added_attributes
