@@ -16,11 +16,15 @@ class CyclicDependency(Exception):
 
 class Plugin:
 
-    def __init__(self, info, module, namespace):
-        self.logger = get_logger('plugin', info['identifier'])
-        self.info = info
+    def __init__(self, module, identifier, namespace, info):
         self.module = module
-        self.module_name = f'{__package__}.{namespace}.{info["identifier"]}'
+        self.identifier = identifier
+        self.namespace = namespace
+        self.info = info
+
+        self.logger = get_logger(namespace, self.identifier)
+        self.module_name = f'{__package__}.{namespace}.{self.identifier}'
+        assert self.module_name == module.__name__
 
     def __repr__(self):
         return (f"<Plugin {self.module_name}:"
@@ -144,7 +148,7 @@ class PluginSystem:
         spec.loader.exec_module(module)
         self.logger.info("Found plugin in", module.__file__)
 
-        plugin = self.plugin_factory(info, module, self.namespace)
+        plugin = self.plugin_factory(module, identifier, self.namespace, info)
         self.logger.info("Loaded plugin", plugin)
         return plugin
 
@@ -154,7 +158,6 @@ class PluginSystem:
             tree = ast.parse(f.read(), str(path))
 
         info = OrderedDict([
-            ('identifier', identifier),
             ('name', None),
             ('version', None),
             ('description', None),
@@ -162,7 +165,7 @@ class PluginSystem:
             ('conflicts', []),
         ])
         required_ids = {'name', 'version', 'description'}
-        ignore_ids = {'identifier'}
+        ignore_ids = {}
 
         for statement in tree.body:
             if not isinstance(statement, ast.Assign):
