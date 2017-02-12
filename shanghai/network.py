@@ -177,6 +177,7 @@ async def init_context(ctx):
         ctx.logger.info('connection closed by peer!')
 
     @ctx.network_event(NetworkEventName.CLOSE_REQUEST, priority=Priority.POST_CORE)
+    # Lower than core to allow core plugins to eat the event
     async def on_close_request(ctx, _):
         if ctx.network.connected:
             ctx.logger.info('closing connection')
