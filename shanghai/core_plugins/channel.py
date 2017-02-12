@@ -20,10 +20,12 @@ import re
 import string
 
 from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
-from shanghai.network import ShadowAttributesMixin, NetworkContext
+from shanghai.network import NetworkContext
+from shanghai.util import ShadowAttributesMixin
 from shanghai.irc.server_reply import ServerReply
-from .message import Message
 from shanghai.logging import get_logger, Logger
+
+from .message import Message
 
 __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
@@ -70,10 +72,10 @@ class ChannelContext(ShadowAttributesMixin):
         self.logger = logger
 
     def say(self, message):
-        self.network_context.send_cmd('PRIVMSG', self._message.channel, message)
+        self.network_context.send_msg(self._message.channel, message)
 
     def msg(self, target, message):
-        self.network_context.send_cmd('PRIVMSG', target, message)
+        self.network_context.send_msg(target, message)
 
     @property
     def members(self):
@@ -109,15 +111,15 @@ class BaseMessage(Message):
 
 class ChannelMessage(BaseMessage):
     def __repr__(self):
-        return f'<{self.__class__.__name__} type={self.command!r} ' \
-               f'sender={self.prefix.name!r} source={self.params[0]!r} ' \
-               f'message={self.params[-1]!r}>'
+        return (f'<{self.__class__.__name__} type={self.command!r} '
+                f'sender={self.prefix.name!r} source={self.params[0]!r} '
+                f'message={self.params[-1]!r}>')
 
 
 class PrivateMessage(BaseMessage):
     def __repr__(self):
-        return f'<{self.__class__.__name__} type={self.command!r} ' \
-               f'sender={self.prefix.name!r} message={self.params[-1]!r}>'
+        return (f'<{self.__class__.__name__} type={self.command!r} '
+                f'sender={self.prefix.name!r} message={self.params[-1]!r}>')
 
 
 class ChannelNotice(ChannelMessage):
