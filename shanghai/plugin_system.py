@@ -60,6 +60,9 @@ class PluginSystem:
                              f" {namespace!r} is a built-in keyword.")
 
         self.namespace = namespace
+        if f'{__package__}.{namespace}' in sys.modules:
+            raise RuntimeError(f"Expected '{__package__}.{namespace}' in `sys.modules` to be unset"
+                               " but it was not")
         setattr(sys.modules[__package__], namespace, self)
         sys.modules[f'{__package__}.{namespace}'] = self
 
