@@ -198,7 +198,11 @@ class PluginSystem:
                 continue
             _id = target.id.strip('_')[7:]
 
-            if _id in ('depends', 'conflicts'):
+            if _id in ignore_ids:
+                continue
+            elif _id not in info:
+                continue
+            elif _id in ('depends', 'conflicts'):
                 listing = statement.value
                 if not isinstance(listing, ast.Tuple):
                     raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple.")
@@ -212,11 +216,6 @@ class PluginSystem:
                 if not isinstance(statement.value, ast.Str):
                     raise TypeError(f"Plugin {identifier!r}: {target.id} can only be a string")
                 value = statement.value.s
-
-            if _id in ignore_ids:
-                continue
-            if _id not in info:
-                continue
 
             if _id in required_ids:
                 required_ids.remove(_id)
