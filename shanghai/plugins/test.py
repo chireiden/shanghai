@@ -23,9 +23,41 @@ __plugin_version__ = 'β.γ.μ'
 __plugin_description__ = 'bla blub'
 
 
+async def channel_message(ctx, message):
+    ctx.logger.debug(f'Got a channel message {message}')
+
+    if message.words[0] == '!nicks':
+        nick_list = []
+        for member in ctx.members:
+            nick = member.nickname
+            nick = f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+            nick_list.append(nick)
+        ctx.say(' '.join(nick_list))
+
+    elif message.words[0] == '!channels':
+        chan_list = []
+        for chanobj in ctx.network_context.channels.values():
+            _c_ctx = ctx.network_context.get_channel_context(chanobj.name)
+            chan_list.append(f'{chanobj.name} ({len(_c_ctx.members)})')
+        ctx.say(', '.join(chan_list))
+
+
+async def private_message(ctx, message):
+    ctx.logger.debug(f'Got a private message {message}')
+
+    if message.words[0] == '!say':
+        if len(message.words) >= 3:
+            target_channel = message.words[1]
+            text = ' '.join(message.words[2:])
+            ctx.msg(target_channel, f'{message.sender} told me to say: {text}')
+
+
 # just for testing
 @global_event(GlobalEventName.INIT_NETWORK_CTX)
 async def init_context(ctx):
+    ctx.channel_event('ChannelMessage')(channel_message)
+    ctx.channel_event('PrivateMessage')(private_message)
+
     @ctx.message_event('PRIVMSG')
     async def on_privmsg(ctx, message):
         line = message.params[-1]
@@ -50,24 +82,3 @@ async def init_context(ctx):
             if len(words) == 2:
                 return words[1]
             return ReturnValue.EAT
-
-        elif words[0] == '!nicks':
-            channel = message.params[0]
-            nick_list = []
-            for lkey, joinobj in ctx.joins.items():
-                if ctx.chan_cmp(lkey[0], channel):
-                    nick = joinobj.user.nickname
-                    nick = f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
-                    nick_list.append(nick)
-            ctx.send_cmd('PRIVMSG', channel, ' '.join(nick_list))
-
-        elif words[0] == '!channels':
-            channel = message.params[0]
-            chan_list = []
-            for lchannel, chanobj in ctx.channels.items():
-                nick_count = 0
-                for lkey, joinobj in ctx.joins.items():
-                    if ctx.chan_cmp(lkey[0], chanobj.name):
-                        nick_count += 1
-                chan_list.append(f'{chanobj.name} ({nick_count})')
-            ctx.send_cmd('PRIVMSG', channel, ', '.join(chan_list))

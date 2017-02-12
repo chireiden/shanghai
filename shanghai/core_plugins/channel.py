@@ -19,10 +19,11 @@
 import re
 import string
 
-from shanghai.event import global_event, GlobalEventName
+from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
 from shanghai.network import NetworkContext
 from shanghai.irc.server_reply import ServerReply
 from .message import Message
+from shanghai.logging import get_logger, Logger
 
 __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
@@ -53,6 +54,78 @@ class Join(_Base):
         self.channel = channel
         self.user = user
         self.info = info if info is not None else {}
+
+
+class ChannelContext(NetworkContext):
+
+    def __init__(self, network_context: NetworkContext, message: 'BaseMessage',
+                 *, logger: Logger=None):
+        self.network_context = network_context
+        self.network = network_context.network
+        self._message = message
+
+        if logger is None:
+            logger = get_logger('channel', f'{self._message.channel}@{self.network.name}',
+                                self.network.config)
+        self.logger = logger
+
+    def say(self, message):
+        self.network_context.send_cmd('PRIVMSG', self._message.channel, message)
+
+    def msg(self, target, message):
+        self.network_context.send_cmd('PRIVMSG', target, message)
+
+    @property
+    def members(self):
+        member_list = []
+        for lkey, joinobj in self.network_context.joins.items():
+            if self.network_context.chan_eq(lkey[0], self._message.channel):
+                member_list.append(joinobj.user)
+        return member_list
+
+
+class ChannelEventDispatcher(EventDispatcher):
+
+    async def dispatch(self, context, msg):
+        return await super().dispatch(msg.command, context, msg)
+
+
+class BaseMessage(Message):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # some convenience accessors
+        self.channel = self.params[0]
+        self.line = self.params[-1]
+        self.words = self.line.split()
+        self.sender = self.prefix.name
+
+    @classmethod
+    def from_message(cls, message: Message):
+        # command name is "ChannelMessage" etc.
+        return cls(cls.__name__, prefix=message.prefix, params=message.params,
+                   tags=message.tags, raw_line=message.raw_line)
+
+
+class ChannelMessage(BaseMessage):
+    def __repr__(self):
+        return f'<{self.__class__.__name__} type={self.command!r} ' \
+               f'sender={self.prefix.name!r} source={self.params[0]!r} ' \
+               f'message={self.params[-1]!r}>'
+
+
+class PrivateMessage(BaseMessage):
+    def __repr__(self):
+        return f'<{self.__class__.__name__} type={self.command!r} ' \
+               f'sender={self.prefix.name!r} message={self.params[-1]!r}>'
+
+
+class ChannelNotice(ChannelMessage):
+    pass
+
+
+class PrivateNotice(PrivateMessage):
+    pass
 
 
 async def on_names(ctx: NetworkContext, message: Message):
@@ -286,7 +359,7 @@ def chan_eq(ctx: NetworkContext, chan1: str, chan2: str):
     return ctx.chan_lower(chan1) == ctx.chan_lower(chan2)
 
 
-@global_event(GlobalEventName.INIT_NETWORK_CTX)
+@global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.POST_CORE)
 async def init_context(ctx: NetworkContext):
     ctx.add_attribute('case_table', generate_case_table(ctx))
     ctx.add_attribute('channels', {})  # l(channel-name) -> channel
@@ -308,3 +381,36 @@ async def init_context(ctx: NetworkContext):
     ctx.message_event('KICK')(on_kick)
     ctx.message_event('NICK')(on_nick)
     ctx.message_event('QUIT')(on_quit)
+
+    channel_contexts = {}
+    channel_event_dispatcher = ChannelEventDispatcher()
+    ctx.add_attribute('channel_event', channel_event_dispatcher.decorator)
+
+    @ctx.add_method
+    def get_channel_context(n_ctx: NetworkContext, channel: str):
+        lchannel = n_ctx.chan_lower(channel)
+        return channel_contexts[lchannel]
+
+    @ctx.message_event('PRIVMSG')
+    @ctx.message_event('NOTICE')
+    async def on_privmsg(n_ctx: NetworkContext, message: Message):
+        channel = message.params[0]
+        lchannel = n_ctx.chan_lower(channel)
+
+        opt_chantypes = n_ctx.network.options.get('CHANTYPES', '#&+')
+        if channel.startswith(tuple(opt_chantypes)):
+            if message.command == 'PRIVMSG':
+                new_message = ChannelMessage.from_message(message)
+            else:
+                new_message = ChannelNotice.from_message(message)
+        else:
+            if message.command == 'PRIVMSG':
+                new_message = PrivateMessage.from_message(message)
+            else:
+                new_message = PrivateNotice.from_message(message)
+
+        if lchannel not in channel_contexts:
+            c_ctx = ChannelContext(n_ctx, new_message)
+            channel_contexts[lchannel] = c_ctx
+
+        await channel_event_dispatcher.dispatch(channel_contexts[lchannel], new_message)
