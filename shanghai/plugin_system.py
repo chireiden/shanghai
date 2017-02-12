@@ -23,8 +23,7 @@ class Plugin:
         self.info = info
 
         self.logger = get_logger(namespace, self.identifier)
-        self.module_name = f'{__package__}.{namespace}.{self.identifier}'
-        assert self.module_name == module.__name__
+        self.module_name = module.__name__
 
     def __repr__(self):
         return (f"<Plugin {self.module_name}:"
@@ -79,28 +78,23 @@ class PluginSystem:
             return self.plugin_registry[item].module
         raise AttributeError(item)
 
-    def load_plugin(self, identifier, *, dependency_path=None, is_core=False):
+    def load_plugin(self, identifier, *, dependency_path=(), is_core=False):
         if not identifier.isidentifier():
             raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
         if keyword.iskeyword(identifier):
             raise ValueError(f"Invalid plugin name. {identifier!r} is a built-in keyword.")
 
-        module_name = f'{__package__}.{self.namespace}.{identifier}'
-
-        if dependency_path is None:
-            dependency_path = []
         if identifier in self.plugin_registry:
             if not dependency_path:
                 self.logger.warn('Plugin', identifier, 'already exists.')
             return self.plugin_registry[identifier]
+
         for search_path in self.plugin_search_paths:
             try:
                 module_path = self._find_module_path(search_path, identifier)
             except OSError:
-                pass
+                continue
             else:
-                plugin = self._load_plugin_as_module(module_path, identifier, module_name,
-                                                     dependency_path=dependency_path)
                 break
         else:
             raise FileNotFoundError(
@@ -108,12 +102,15 @@ class PluginSystem:
                 + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
             )
 
-        # add to registry
-        self.plugin_registry[identifier] = plugin
-        module_name = f'{__package__}.{self.namespace}.{identifier}'
-        sys.modules[module_name] = plugin.module
-        self.logger.debug(f"Setting sys.modules[{module_name!r}] to {plugin.module}")
+        plugin = self._load_plugin_as_module(module_path, identifier,
+                                             dependency_path=dependency_path)
+        self._register_plugin(plugin)
         return plugin
+
+    def _register_plugin(self, plugin):
+        self.plugin_registry[plugin.identifier] = plugin
+        sys.modules[plugin.module_name] = plugin.module
+        self.logger.debug(f"Setting sys.modules[{plugin.module_name!r}] to {plugin.module}")
 
     @classmethod
     def _find_module_path(cls, search_path: pathlib.Path, identifier) -> pathlib.Path:
@@ -125,22 +122,24 @@ class PluginSystem:
             return module_path
         raise OSError(f"Error trying to load {str(path)!r}")
 
-    def _load_plugin_as_module(self, path: pathlib.Path, identifier, module_name, *,
-                               dependency_path):
+    def _load_plugin_as_module(self, path: pathlib.Path, identifier, *, dependency_path=()):
         info = self._get_plugin_info(path, identifier)
+
         # TODO info['conflicts']
         for dependency in info['depends']:
             if dependency in dependency_path:
                 raise CyclicDependency(
                     f"Cyclic dependency detected: {' -> '.join([identifier] + dependency_path)}"
                 )
-            self.load_plugin(dependency, dependency_path=dependency_path + [identifier])
+            self.load_plugin(dependency, dependency_path=dependency_path + (identifier,))
 
         if dependency_path:
             self.logger.info("Loading plugin", identifier,
                              "as dependency of", dependency_path)
         else:
             self.logger.info("Loading plugin", identifier)
+
+        module_name = f'{__package__}.{self.namespace}.{identifier}'
         spec = importlib.util.spec_from_file_location(module_name, str(path))
 
         module = importlib.util.module_from_spec(spec)
