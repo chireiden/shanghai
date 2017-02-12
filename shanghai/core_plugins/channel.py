@@ -86,7 +86,7 @@ async def on_names(ctx: NetworkContext, message: Message):
         ctx.collecting_names[lchannel] = True
         # restarting NAMES command, so we empty the join list for current channel
         for lkey in list(ctx.joins):  # lkey = (lchannel, lnick)
-            if ctx.chan_cmp(lkey[0], message.params[2]):
+            if ctx.chan_eq(lkey[0], message.params[2]):
                 del ctx.joins[lkey]
 
     # get list of nicknames and their modes if available
@@ -126,7 +126,7 @@ async def on_join(ctx: NetworkContext, message: Message):
         return
     channel = message.params[0]
     lchannel = ctx.chan_lower(channel)
-    if ctx.nick_cmp(message.prefix.name, ctx.network.nickname):
+    if ctx.nick_eq(message.prefix.name, ctx.network.nickname):
         # add channel if not already added
         if lchannel not in ctx.channels:
             ctx.channels[lchannel] = Channel(channel, [])
@@ -177,7 +177,7 @@ async def on_nick(ctx: NetworkContext, message: Message):
     lnew_nick = ctx.nick_lower(new_nick)
 
     for lkey in list(ctx.joins):
-        if ctx.nick_cmp(lkey[1], lnick):
+        if ctx.nick_eq(lkey[1], lnick):
             lnew_key = (lkey[0], lnew_nick)
             ctx.joins[lnew_key] = ctx.joins[lkey]
             del ctx.joins[lkey]
@@ -188,7 +188,7 @@ async def on_nick(ctx: NetworkContext, message: Message):
         del ctx.users[lnick]
 
     # should we do this here?
-    if ctx.nick_cmp(nick, ctx.network.nickname):
+    if ctx.nick_eq(nick, ctx.network.nickname):
         ctx.network.nickname = new_nick
 
 
@@ -196,7 +196,7 @@ async def on_quit(ctx: NetworkContext, message: Message):
     nick = message.prefix.name
     lnick = ctx.nick_lower(nick)
     for lkey in list(ctx.joins):
-        if ctx.nick_cmp(lnick, lkey[1]):
+        if ctx.nick_eq(lnick, lkey[1]):
             del ctx.joins[lkey]
 
     if lnick in ctx.users:
@@ -208,7 +208,7 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
     lnick = ctx.nick_lower(nick)
     lchannel = ctx.nick_lower(channel)
 
-    if ctx.nick_cmp(ctx.network.nickname, nick):
+    if ctx.nick_eq(ctx.network.nickname, nick):
         # remove myself -> remove channel instance and all users, and remove
         # all user instances that are not visible anymore.
 
@@ -216,15 +216,15 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
         # that where on that channel.
         nicks_to_test = set()
         for lkey in list(ctx.joins):
-            if ctx.chan_cmp(lchannel, lkey[0]):
-                if not ctx.nick_cmp(ctx.network.nickname, lkey[1]):
+            if ctx.chan_eq(lchannel, lkey[0]):
+                if not ctx.nick_eq(ctx.network.nickname, lkey[1]):
                     nicks_to_test.add(lkey[1])
                 del ctx.joins[lkey]
 
         # check if nicks that got removed are visible somewhere else
         for other_nick in list(nicks_to_test):
             for lkey in ctx.joins:
-                if ctx.nick_cmp(other_nick, lkey[1]):
+                if ctx.nick_eq(other_nick, lkey[1]):
                     # nick is visible, remove it from the set
                     nicks_to_test.remove(other_nick)
                     break
@@ -246,7 +246,7 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
         del ctx.joins[(lchannel, lnick)]
 
     for lkey in ctx.joins:
-        if ctx.nick_cmp(lnick, lkey[1]):
+        if ctx.nick_eq(lnick, lkey[1]):
             break
     else:
         # nick not found
@@ -255,7 +255,7 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
 
 
 # nick/chan string API
-def nick_lower(ctx: NetworkContext, nick: str):
+def generate_case_table(ctx: NetworkContext):
     case_mapping = ctx.network.options.get('CASEMAPPING', 'rfc1459').lower()
     if case_mapping not in ('ascii', 'rfc1459', 'strict-rfc1459'):
         case_mapping = 'rfc1459'
@@ -267,35 +267,39 @@ def nick_lower(ctx: NetworkContext, nick: str):
     elif case_mapping == 'strict-rfc1459':
         upper_str += '[]\\'
         lower_str += '{}|'
-    table = nick.maketrans(upper_str, lower_str)
-    return nick.translate(table)
+    return str.maketrans(upper_str, lower_str)
+
+
+def nick_lower(ctx: NetworkContext, nick: str):
+    return nick.translate(ctx.case_table)
 
 
 def chan_lower(ctx: NetworkContext, chan: str):
     return ctx.nick_lower(chan)
 
 
-def nick_cmp(ctx: NetworkContext, nick1: str, nick2: str):
+def nick_eq(ctx: NetworkContext, nick1: str, nick2: str):
     return ctx.nick_lower(nick1) == ctx.nick_lower(nick2)
 
 
-def chan_cmp(ctx: NetworkContext, chan1: str, chan2: str):
+def chan_eq(ctx: NetworkContext, chan1: str, chan2: str):
     return ctx.chan_lower(chan1) == ctx.chan_lower(chan2)
 
 
 @global_event(GlobalEventName.INIT_NETWORK_CTX)
 async def init_context(ctx: NetworkContext):
+    ctx.add_attribute('case_table', generate_case_table(ctx))
     ctx.add_attribute('channels', {})  # l(channel-name) -> channel
     ctx.add_attribute('users', {})  # l(nickname) -> user
     ctx.add_attribute('joins', {})  # (l(channel-name), l(nickname)) -> (channel, user, info_dict)
     ctx.add_attribute('collecting_names', {})
 
-    ctx.add_method('remove_nick_from_channel', remove_nick_from_channel)
+    ctx.add_method(remove_nick_from_channel)
 
-    ctx.add_method('nick_lower', nick_lower)
-    ctx.add_method('chan_lower', chan_lower)
-    ctx.add_method('nick_cmp', nick_cmp)
-    ctx.add_method('chan_cmp', chan_cmp)
+    ctx.add_method(nick_lower)
+    ctx.add_method(chan_lower)
+    ctx.add_method(nick_eq)
+    ctx.add_method(chan_eq)
 
     ctx.message_event(ServerReply.RPL_NAMREPLY)(on_names)
     ctx.message_event(ServerReply.RPL_ENDOFNAMES)(on_names)
