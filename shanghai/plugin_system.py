@@ -51,8 +51,6 @@ class PluginSystem:
         _core_plugin_base_path,
     ]
 
-    plugin_factory = Plugin
-
     def __init__(self, namespace, is_core=False):
         if not namespace.isidentifier():
             raise ValueError("Invalid plugin namespace."
@@ -148,7 +146,7 @@ class PluginSystem:
         spec.loader.exec_module(module)
         self.logger.info("Found plugin in", module.__file__)
 
-        plugin = self.plugin_factory(module, identifier, self.namespace, info)
+        plugin = Plugin(module, identifier, self.namespace, info)
         self.logger.info("Loaded plugin", plugin)
         return plugin
 
