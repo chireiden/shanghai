@@ -38,6 +38,7 @@ class Shanghai:
         self.core_plugins.load_plugin('ctcp')
         self.core_plugins.load_plugin('message')
         self.core_plugins.load_plugin('ping')
+        self.core_plugins.load_plugin('channel')
 
         # TODO: load plugins from configuration
         self.user_plugins.load_plugin('test')

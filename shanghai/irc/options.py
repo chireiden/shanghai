@@ -60,3 +60,9 @@ class Options:
             else:
                 key, value = option, True
             self[key] = value
+
+    def get(self, item, default=None):
+        try:
+            return self[item]
+        except KeyError:
+            return default

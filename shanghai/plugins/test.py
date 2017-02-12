@@ -50,3 +50,24 @@ async def init_context(ctx):
             if len(words) == 2:
                 return words[1]
             return ReturnValue.EAT
+
+        elif words[0] == '!nicks':
+            channel = message.params[0]
+            nick_list = []
+            for lkey, joinobj in ctx.joins.items():
+                if ctx.chan_cmp(lkey[0], channel):
+                    nick = joinobj.user.nickname
+                    nick = f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+                    nick_list.append(nick)
+            ctx.send_cmd('PRIVMSG', channel, ' '.join(nick_list))
+
+        elif words[0] == '!channels':
+            channel = message.params[0]
+            chan_list = []
+            for lchannel, chanobj in ctx.channels.items():
+                nick_count = 0
+                for lkey, joinobj in ctx.joins.items():
+                    if ctx.chan_cmp(lkey[0], chanobj.name):
+                        nick_count += 1
+                chan_list.append(f'{chanobj.name} ({nick_count})')
+            ctx.send_cmd('PRIVMSG', channel, ', '.join(chan_list))
