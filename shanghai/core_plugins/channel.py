@@ -27,6 +27,7 @@ from .message import Message
 __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Track channel state'
+__plugin_depends__ = ('message',)
 
 
 class _Base:
