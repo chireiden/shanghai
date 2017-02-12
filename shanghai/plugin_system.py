@@ -108,7 +108,7 @@ class PluginSystem:
 
         if identifier in self.plugin_registry:
             if not dependency_path:
-                self.logger.warn('Plugin', identifier, 'already exists.')
+                self.logger.warn(f"Plugin {identifier!r} already exists")
             return self.plugin_registry[identifier]
 
         for search_path in self.plugin_search_paths:
@@ -120,7 +120,7 @@ class PluginSystem:
                 break
         else:
             raise FileNotFoundError(
-                f"Could not find plugin {identifier!r} in any of the search \tpaths:"
+                f"Could not find plugin {identifier!r} in any of the search paths:"
                 + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
             )
 
@@ -156,8 +156,7 @@ class PluginSystem:
             self.load_plugin(dependency, dependency_path=dependency_path + (identifier,))
 
         if dependency_path:
-            self.logger.info("Loading plugin", identifier,
-                             "as dependency of", dependency_path)
+            self.logger.info(f"Loading plugin {identifier!r} as dependency of {dependency_path!r}")
         else:
             self.logger.info("Loading plugin", identifier)
 
@@ -202,16 +201,16 @@ class PluginSystem:
             if _id in ('depends', 'conflicts'):
                 listing = statement.value
                 if not isinstance(listing, ast.Tuple):
-                    raise TypeError(f"Plugin {identifier}: {target.id} must be a tuple.")
+                    raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple.")
                 value = []
                 for element in listing.elts:
                     if not isinstance(element, ast.Str):
-                        raise TypeError(f"Plugin {identifier}: {target.id} must be a tuple"
+                        raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple"
                                         " and must only contain strings.")
                     value.append(element.s)
             else:
                 if not isinstance(statement.value, ast.Str):
-                    raise TypeError(f"Plugin {identifier}: {target.id} can only be a string")
+                    raise TypeError(f"Plugin {identifier!r}: {target.id} can only be a string")
                 value = statement.value.s
 
             if _id in ignore_ids:
