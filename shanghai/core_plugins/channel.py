@@ -76,7 +76,7 @@ async def on_names(ctx: NetworkContext, message: Message):
     if match is None:
         match = prefix_regex.match('(ov)@+')  # fallback
     if match is None:
-        ctx.logger.warn('RPL_NAMREPLY has unexpected behaviour.'
+        ctx.logger.warn('RPL_NAMREPLY has unexpected behaviour. '
                         'Either prefix or regex is wrong. '
                         f'Don\'t know what to do. {opt_prefixes!r} {prefix_regex!r}')
         return
