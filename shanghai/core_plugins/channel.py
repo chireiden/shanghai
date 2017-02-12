@@ -156,6 +156,7 @@ async def on_part(ctx: NetworkContext, message: Message):
     nick = message.prefix.name
     ctx.remove_nick_from_channel(nick, lchannel)
 
+
 async def on_kick(ctx: NetworkContext, message: Message):
     lchannel = ctx.chan_lower(message.params[0])
 
