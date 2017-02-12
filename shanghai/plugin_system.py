@@ -39,19 +39,20 @@ class PluginSystem:
         # ~/.config/shanghai/plugins
         _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
 
-    _core_plugin_base_path = pathlib.Path(__file__).parent
+    _shanghai_base_path = pathlib.Path(__file__).parent
 
-    # TODO: add configuration location
+    # From higher to lower priority
     PLUGIN_SEARCH_BASE_PATHS = [
         # current directory
-        # TODO might be redundant
         pathlib.Path(os.getcwd()),
+        # user config base
         _home_config_path,
         # <SHANGHAI_PACKAGE_DIR>
-        _core_plugin_base_path,
+        _shanghai_base_path,
     ]
 
     def __init__(self, namespace, is_core=False):
+        # TODO add search base paths parameter
         if not namespace.isidentifier():
             raise ValueError("Invalid plugin namespace."
                              f" {namespace!r} contains invalid symbol(s).")
@@ -65,7 +66,7 @@ class PluginSystem:
 
         if is_core:
             # just search in one single path
-            self.plugin_search_paths = [pathlib.Path(self._core_plugin_base_path, namespace)]
+            self.plugin_search_paths = [pathlib.Path(self._shanghai_base_path, namespace)]
         else:
             self.plugin_search_paths = [pathlib.Path(base_path, namespace)
                                         for base_path in self.PLUGIN_SEARCH_BASE_PATHS]
