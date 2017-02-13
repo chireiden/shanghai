@@ -36,6 +36,7 @@ __plugin_depends__ = ('message',)
 class ChannelContext(ShadowAttributesMixin):
 
     def __init__(self, name, network_context: NetworkContext, *, logger: Logger=None):
+        super().__init__()
         self.name = name
         self.network_context = network_context
         self.network = network_context.network
