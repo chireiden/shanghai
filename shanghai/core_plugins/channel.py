@@ -40,19 +40,18 @@ Channel.__new__.__defaults__ = (None,)
 
 class ChannelContext(ShadowAttributesMixin):
 
-    def __init__(self, network_context: NetworkContext, message: 'BaseMessage',
-                 *, logger: Logger=None):
+    def __init__(self, name, network_context: NetworkContext, *, logger: Logger=None):
+        self.name = name
         self.network_context = network_context
         self.network = network_context.network
-        self._message = message
 
         if logger is None:
-            logger = get_logger('channel', f'{self._message.channel}@{self.network.name}',
+            logger = get_logger('channel', f'{self.name}@{self.network.name}',
                                 self.network.config)
         self.logger = logger
 
     def say(self, message):
-        self.network_context.send_msg(self._message.channel, message)
+        self.network_context.send_msg(self.name, message)
 
     def msg(self, target, message):
         self.network_context.send_msg(target, message)
@@ -62,7 +61,7 @@ class ChannelContext(ShadowAttributesMixin):
         n_ctx = self.network_context
         member_list = []
         for lkey in n_ctx._joins:
-            if n_ctx.chan_eq(lkey[0], self._message.channel):
+            if n_ctx.chan_eq(lkey[0], self.name):
                 member_list.append(n_ctx.users[lkey[1]])
         return member_list
 
@@ -381,7 +380,7 @@ async def init_context(ctx: NetworkContext):
                 new_message = PrivateNotice.from_message(message)
 
         if lchannel not in channel_contexts:
-            c_ctx = ChannelContext(n_ctx, new_message)
+            c_ctx = ChannelContext(channel, n_ctx)
             channel_contexts[lchannel] = c_ctx
 
         await channel_event_dispatcher.dispatch(channel_contexts[lchannel], new_message)
