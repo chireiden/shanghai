@@ -30,7 +30,7 @@ from .message import Message
 __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Track channel state'
-__plugin_depends__ = ('message',)
+__plugin_depends__ = ('message', 'options')
 
 
 class ChannelContext(ShadowAttributesMixin):
@@ -120,18 +120,6 @@ async def on_names(ctx: NetworkContext, message: Message):
         ctx.logger.warn(f'Got message from channel we\'re not in: {message!r}')
         return
 
-    opt_namesx = ctx.network.options.get('NAMESX', False)
-    opt_prefixes = ctx.network.options.get('PREFIX', '(ov)@+')
-    prefix_regex = re.compile(r'^\((?P<mode>.*)\)(?P<prefix>.*)$')
-    match = prefix_regex.match(opt_prefixes)
-    if match is None:
-        match = prefix_regex.match('(ov)@+')  # fallback
-    if match is None:
-        ctx.logger.warn('RPL_NAMREPLY has unexpected behaviour. '
-                        'Either prefix or regex is wrong. '
-                        f'Don\'t know what to do. {opt_prefixes!r} {prefix_regex!r}')
-        return
-
     if lchannel not in ctx._collecting_names:
         ctx._collecting_names.add(lchannel)
         # restarting NAMES command, so we empty the join list for current channel
@@ -144,24 +132,12 @@ async def on_names(ctx: NetworkContext, message: Message):
     # TODO: when CAP is implemented, this has to respect the "multi-prefix" capability as well.
     prefixed_nicks = message.params[3].split()
     for prefixed_nick in prefixed_nicks:
-        if opt_namesx:
-            nick = prefixed_nick.lstrip(match.group('prefix'))
-        else:
-            nick = prefixed_nick
-            if nick[0] in match.group('prefix'):
-                nick = prefixed_nick[1:]
-        d = len(prefixed_nick) - len(nick)
-        prefixes = prefixed_nick[:d-len(prefixed_nick)]
-        modes = []
-        for prefix in prefixes:
-            i = match.group('prefix').index(prefix)
-            modes.append(match.group('mode')[i])
+        prefixes, nick = ctx.options.split_prefixes(prefixed_nick)
+        modes = ctx.options.prefixes_to_modes(prefixes)
 
         # add nick to channel
         lnick = ctx.nick_lower(nick)
-
         if lnick not in ctx.users:
-            # TODO: CAP "multi-prefix"
             ctx.users[lnick] = Prefix(nick)
 
         ctx._joins[(lchannel, lnick)] = {'modes': modes}
@@ -292,41 +268,8 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
             del ctx.users[lnick]
 
 
-# nick/chan string API
-def generate_case_table(ctx: NetworkContext):
-    case_mapping = ctx.network.options.get('CASEMAPPING', 'rfc1459').lower()
-    if case_mapping not in ('ascii', 'rfc1459', 'strict-rfc1459'):
-        case_mapping = 'rfc1459'
-    upper_str = string.ascii_uppercase
-    lower_str = string.ascii_lowercase
-    if case_mapping == 'rfc1459':
-        upper_str += '[]\\^'
-        lower_str += '{}|~'
-    elif case_mapping == 'strict-rfc1459':
-        upper_str += '[]\\'
-        lower_str += '{}|'
-    return str.maketrans(upper_str, lower_str)
-
-
-def nick_lower(ctx: NetworkContext, nick: str):
-    return nick.translate(ctx._case_table)
-
-
-def chan_lower(ctx: NetworkContext, chan: str):
-    return ctx.nick_lower(chan)
-
-
-def nick_eq(ctx: NetworkContext, nick1: str, nick2: str):
-    return ctx.nick_lower(nick1) == ctx.nick_lower(nick2)
-
-
-def chan_eq(ctx: NetworkContext, chan1: str, chan2: str):
-    return ctx.chan_lower(chan1) == ctx.chan_lower(chan2)
-
-
 @global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.POST_CORE)
 async def init_context(ctx: NetworkContext):
-    ctx.add_attribute('_case_table', generate_case_table(ctx))
     ctx.add_attribute('_collecting_names', set())  # l(channel-name)
 
     ctx.add_attribute('channels', {})  # l(channel-name) -> Channel
@@ -335,11 +278,6 @@ async def init_context(ctx: NetworkContext):
     ctx.add_attribute('_joins', {})  # (l(channel-name), l(nickname)) -> info_dict
 
     ctx.add_method(remove_nick_from_channel)
-
-    ctx.add_method(nick_lower)
-    ctx.add_method(chan_lower)
-    ctx.add_method(nick_eq)
-    ctx.add_method(chan_eq)
 
     ctx.message_event(ServerReply.RPL_NAMREPLY)(on_names)
     ctx.message_event(ServerReply.RPL_ENDOFNAMES)(on_names)
