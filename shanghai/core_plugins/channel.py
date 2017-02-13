@@ -80,7 +80,7 @@ class ChannelContext(ShadowAttributesMixin):
     @property
     def members(self):
         member_list = []
-        for lkey, joinobj in self.network_context.joins.items():
+        for lkey, joinobj in self.network_context._joins.items():
             if self.network_context.chan_eq(lkey[0], self._message.channel):
                 member_list.append(joinobj.user)
         return member_list
@@ -136,8 +136,8 @@ async def on_names(ctx: NetworkContext, message: Message):
         lchannel = ctx.chan_lower(message.params[1])
         if lchannel not in ctx.channels:
             ctx.logger.warn(f'Got message from channel we\'re not in: {message!r}')
-        if lchannel in ctx.collecting_names:
-            del ctx.collecting_names[lchannel]
+        if lchannel in ctx._collecting_names:
+            del ctx._collecting_names[lchannel]
         return
 
     lchannel = ctx.chan_lower(message.params[2])
@@ -157,12 +157,12 @@ async def on_names(ctx: NetworkContext, message: Message):
                         f'Don\'t know what to do. {opt_prefixes!r} {prefix_regex!r}')
         return
 
-    if not ctx.collecting_names.get(lchannel, False):
-        ctx.collecting_names[lchannel] = True
+    if not ctx._collecting_names.get(lchannel, False):
+        ctx._collecting_names[lchannel] = True
         # restarting NAMES command, so we empty the join list for current channel
-        for lkey in list(ctx.joins):  # lkey = (lchannel, lnick)
+        for lkey in list(ctx._joins):  # lkey = (lchannel, lnick)
             if ctx.chan_eq(lkey[0], message.params[2]):
-                del ctx.joins[lkey]
+                del ctx._joins[lkey]
 
     # get list of nicknames and their modes if available
     # TODO: when CAP is implemented, this has to respect the "multi-prefix" capability as well.
@@ -188,7 +188,7 @@ async def on_names(ctx: NetworkContext, message: Message):
             # TODO: CAP "multi-prefix"
             ctx.users[lnick] = User(nick, '', '')
 
-        ctx.joins[(lchannel, lnick)] = Join(
+        ctx._joins[(lchannel, lnick)] = Join(
             ctx.channels[lchannel],
             ctx.users[lnick],
             {'modes': modes}
@@ -214,8 +214,8 @@ async def on_join(ctx: NetworkContext, message: Message):
     lnick = ctx.nick_lower(message.prefix.name)
     if lnick not in ctx.users:
         ctx.users[lnick] = User(*message.prefix)
-    if (lchannel, lnick) not in ctx.joins:
-        ctx.joins[(lchannel, lnick)] = Join(
+    if (lchannel, lnick) not in ctx._joins:
+        ctx._joins[(lchannel, lnick)] = Join(
             ctx.channels[lchannel],
             ctx.users[lnick],
             {'modes': []}  # extra info dict, for e.g. modes
@@ -251,11 +251,11 @@ async def on_nick(ctx: NetworkContext, message: Message):
     lnick = ctx.nick_lower(nick)
     lnew_nick = ctx.nick_lower(new_nick)
 
-    for lkey in list(ctx.joins):
+    for lkey in list(ctx._joins):
         if ctx.nick_eq(lkey[1], lnick):
             lnew_key = (lkey[0], lnew_nick)
-            ctx.joins[lnew_key] = ctx.joins[lkey]
-            del ctx.joins[lkey]
+            ctx._joins[lnew_key] = ctx._joins[lkey]
+            del ctx._joins[lkey]
 
     if lnick in ctx.users:
         ctx.users[lnew_nick] = ctx.users[lnick]
@@ -270,9 +270,9 @@ async def on_nick(ctx: NetworkContext, message: Message):
 async def on_quit(ctx: NetworkContext, message: Message):
     nick = message.prefix.name
     lnick = ctx.nick_lower(nick)
-    for lkey in list(ctx.joins):
+    for lkey in list(ctx._joins):
         if ctx.nick_eq(lnick, lkey[1]):
-            del ctx.joins[lkey]
+            del ctx._joins[lkey]
 
     if lnick in ctx.users:
         del ctx.users[lnick]
@@ -290,15 +290,15 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
         # find all joins for that channel, remove them, and collect the nicks
         # that where on that channel.
         nicks_to_test = set()
-        for lkey in list(ctx.joins):
+        for lkey in list(ctx._joins):
             if ctx.chan_eq(lchannel, lkey[0]):
                 if not ctx.nick_eq(ctx.network.nickname, lkey[1]):
                     nicks_to_test.add(lkey[1])
-                del ctx.joins[lkey]
+                del ctx._joins[lkey]
 
         # check if nicks that got removed are visible somewhere else
         for other_nick in list(nicks_to_test):
-            for lkey in ctx.joins:
+            for lkey in ctx._joins:
                 if ctx.nick_eq(other_nick, lkey[1]):
                     # nick is visible, remove it from the set
                     nicks_to_test.remove(other_nick)
@@ -317,10 +317,10 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
 
     # case: nick that is not me is removed
     # remove join, and test if user is still visible. if not, remove user
-    if (lchannel, lnick) in ctx.joins:
-        del ctx.joins[(lchannel, lnick)]
+    if (lchannel, lnick) in ctx._joins:
+        del ctx._joins[(lchannel, lnick)]
 
-    for lkey in ctx.joins:
+    for lkey in ctx._joins:
         if ctx.nick_eq(lnick, lkey[1]):
             break
     else:
@@ -346,7 +346,7 @@ def generate_case_table(ctx: NetworkContext):
 
 
 def nick_lower(ctx: NetworkContext, nick: str):
-    return nick.translate(ctx.case_table)
+    return nick.translate(ctx._case_table)
 
 
 def chan_lower(ctx: NetworkContext, chan: str):
@@ -363,11 +363,11 @@ def chan_eq(ctx: NetworkContext, chan1: str, chan2: str):
 
 @global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.POST_CORE)
 async def init_context(ctx: NetworkContext):
-    ctx.add_attribute('case_table', generate_case_table(ctx))
+    ctx.add_attribute('_case_table', generate_case_table(ctx))
+    ctx.add_attribute('_collecting_names', {})  # l(channel-name)
     ctx.add_attribute('channels', {})  # l(channel-name) -> channel
     ctx.add_attribute('users', {})  # l(nickname) -> user
-    ctx.add_attribute('joins', {})  # (l(channel-name), l(nickname)) -> (channel, user, info_dict)
-    ctx.add_attribute('collecting_names', {})
+    ctx.add_attribute('_joins', {})  # (l(channel-name), l(nickname)) -> (channel, user, info_dict)
 
     ctx.add_method(remove_nick_from_channel)
 
