@@ -271,7 +271,7 @@ def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
             del ctx.users[lnick]
 
 
-@global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.POST_CORE)
+@global_event.core(GlobalEventName.INIT_NETWORK_CTX)
 async def init_context(ctx: NetworkContext):
     ctx.add_attribute('_collecting_names', set())  # l(channel-name)
 
