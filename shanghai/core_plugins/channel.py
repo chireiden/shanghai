@@ -17,8 +17,6 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 from collections import namedtuple
-import re
-import string
 
 from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
 from shanghai.network import NetworkContext
