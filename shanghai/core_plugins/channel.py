@@ -16,13 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections import namedtuple
 import re
 import string
 
 from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
 from shanghai.network import NetworkContext
 from shanghai.util import ShadowAttributesMixin
-from shanghai.irc.server_reply import ServerReply
+from shanghai.irc import Prefix, ServerReply
 from shanghai.logging import get_logger, Logger
 
 from .message import Message
@@ -33,22 +34,8 @@ __plugin_description__ = 'Track channel state'
 __plugin_depends__ = ('message',)
 
 
-class _Base:
-    def __hash__(self):
-        return hash(id(self))
-
-
-class Channel(_Base):
-    def __init__(self, name, modes=None):
-        self.name = name
-        self.modes = modes
-
-
-class User(_Base):
-    def __init__(self, nickname, ident='', host=''):
-        self.nickname = nickname
-        self.ident = ident
-        self.host = host
+Channel = namedtuple('Channel', "name modes")
+Channel.__new__.__defaults__ = (None,)
 
 
 class ChannelContext(ShadowAttributesMixin):
@@ -180,7 +167,7 @@ async def on_names(ctx: NetworkContext, message: Message):
 
         if lnick not in ctx.users:
             # TODO: CAP "multi-prefix"
-            ctx.users[lnick] = User(nick, '', '')
+            ctx.users[lnick] = Prefix(nick)
 
         ctx._joins[(lchannel, lnick)] = {'modes': modes}
 
@@ -203,8 +190,8 @@ async def on_join(ctx: NetworkContext, message: Message):
         return
 
     lnick = ctx.nick_lower(message.prefix.name)
-    if lnick not in ctx.users:
-        ctx.users[lnick] = User(*message.prefix)
+    ctx.users.setdefault(lnick, message.prefix)
+
     if (lchannel, lnick) not in ctx._joins:
         ctx._joins[(lchannel, lnick)] = {'modes': []}  # extra info dict, for e.g. modes
 
@@ -239,8 +226,7 @@ async def on_nick(ctx: NetworkContext, message: Message):
     lnew_nick = ctx.nick_lower(new_nick)
 
     if lnick in ctx.users:
-        ctx.users[lnew_nick] = ctx.users[lnick]
-        ctx.users[lnew_nick].nickname = new_nick
+        ctx.users[lnew_nick] = ctx.users[lnick]._replace(name=new_nick)
         del ctx.users[lnick]
 
     # TODO move elsewhere
@@ -348,7 +334,7 @@ async def init_context(ctx: NetworkContext):
     ctx.add_attribute('_collecting_names', set())  # l(channel-name)
 
     ctx.add_attribute('channels', {})  # l(channel-name) -> Channel
-    ctx.add_attribute('users', {})  # l(nickname) -> User
+    ctx.add_attribute('users', {})  # l(nickname) -> Prefix
     # _joins is a relational table that connects channels and users
     ctx.add_attribute('_joins', {})  # (l(channel-name), l(nickname)) -> info_dict
 

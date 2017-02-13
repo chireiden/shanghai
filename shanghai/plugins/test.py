@@ -26,13 +26,11 @@ __plugin_description__ = 'bla blub'
 async def channel_message(ctx, message):
     ctx.logger.debug(f'Got a channel message {message}')
 
+    def unhighlight(nick):
+        return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+
     if message.words[0] == '!nicks':
-        nick_list = []
-        for member in ctx.members:
-            nick = member.nickname
-            nick = f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
-            nick_list.append(nick)
-        ctx.say(' '.join(nick_list))
+        ctx.say(' '.join(unhighlight(member.name) for member in ctx.members))
 
     elif message.words[0] == '!channels':
         chan_list = []
