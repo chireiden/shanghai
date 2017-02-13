@@ -30,7 +30,16 @@ async def channel_message(ctx, message):
         return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
 
     if message.words[0] == '!nicks':
-        ctx.say(' '.join(unhighlight(member.name) for member in ctx.members))
+        nick_list = [unhighlight(member.prefix.name)
+                     for member in ctx.members]
+        ctx.say(' '.join(nick_list))
+
+    if message.words[0] == '!names':
+        nick_list = []
+        for member in ctx.members:
+            prefixes = ctx.network_context.options.modes_to_prefixes(member.modes)
+            nick_list.append(f"{prefixes}{unhighlight(member.prefix.name)}")
+        ctx.say(' '.join(nick_list))
 
     elif message.words[0] == '!channels':
         chan_list = [f"{_c_ctx.name} ({len(_c_ctx.members)})"

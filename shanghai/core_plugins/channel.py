@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections import namedtuple
 import re
 import string
 
@@ -31,6 +32,9 @@ __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Track channel state'
 __plugin_depends__ = ('message', 'options')
+
+
+Member = namedtuple('Member', 'prefix modes')
 
 
 class ChannelContext(ShadowAttributesMixin):
@@ -58,7 +62,8 @@ class ChannelContext(ShadowAttributesMixin):
         member_list = []
         for lkey in n_ctx._joins:
             if n_ctx.chan_eq(lkey[0], self.name):
-                member_list.append(n_ctx.users[lkey[1]])
+                member = Member(n_ctx.users[lkey[1]], **n_ctx._joins[lkey])
+                member_list.append(member)
         return member_list
 
 
