@@ -136,8 +136,7 @@ async def on_names(ctx: NetworkContext, message: Message):
         lchannel = ctx.chan_lower(message.params[1])
         if lchannel not in ctx.channels:
             ctx.logger.warn(f'Got message from channel we\'re not in: {message!r}')
-        if lchannel in ctx._collecting_names:
-            del ctx._collecting_names[lchannel]
+        ctx._collecting_names.discard(lchannel)
         return
 
     lchannel = ctx.chan_lower(message.params[2])
@@ -157,8 +156,8 @@ async def on_names(ctx: NetworkContext, message: Message):
                         f'Don\'t know what to do. {opt_prefixes!r} {prefix_regex!r}')
         return
 
-    if not ctx._collecting_names.get(lchannel, False):
-        ctx._collecting_names[lchannel] = True
+    if lchannel not in ctx._collecting_names:
+        ctx._collecting_names.add(lchannel)
         # restarting NAMES command, so we empty the join list for current channel
         for lkey in list(ctx._joins):  # lkey = (lchannel, lnick)
             if ctx.chan_eq(lkey[0], message.params[2]):
@@ -364,7 +363,7 @@ def chan_eq(ctx: NetworkContext, chan1: str, chan2: str):
 @global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.POST_CORE)
 async def init_context(ctx: NetworkContext):
     ctx.add_attribute('_case_table', generate_case_table(ctx))
-    ctx.add_attribute('_collecting_names', {})  # l(channel-name)
+    ctx.add_attribute('_collecting_names', set())  # l(channel-name)
     ctx.add_attribute('channels', {})  # l(channel-name) -> channel
     ctx.add_attribute('users', {})  # l(nickname) -> user
     ctx.add_attribute('_joins', {})  # (l(channel-name), l(nickname)) -> (channel, user, info_dict)
