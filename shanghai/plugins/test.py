@@ -80,3 +80,7 @@ async def init_context(ctx):
             if len(words) == 2:
                 return words[1]
             return ReturnValue.EAT
+
+        elif words[0] == '!quote':
+            _, line_to_send = line.split(maxsplit=1)
+            ctx.send_line(line_to_send)
