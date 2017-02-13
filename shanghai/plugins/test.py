@@ -33,10 +33,8 @@ async def channel_message(ctx, message):
         ctx.say(' '.join(unhighlight(member.name) for member in ctx.members))
 
     elif message.words[0] == '!channels':
-        chan_list = []
-        for chanobj in ctx.network_context.channels.values():
-            _c_ctx = ctx.network_context.get_channel_context(chanobj.name)
-            chan_list.append(f'{chanobj.name} ({len(_c_ctx.members)})')
+        chan_list = [f"{_c_ctx.name} ({len(_c_ctx.members)})"
+                     for _c_ctx in ctx.network_context.channels.values()]
         ctx.say(', '.join(chan_list))
 
 

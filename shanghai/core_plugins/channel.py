@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections import namedtuple
 import re
 import string
 
@@ -32,10 +31,6 @@ __plugin_name__ = 'Channel'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Track channel state'
 __plugin_depends__ = ('message',)
-
-
-Channel = namedtuple('Channel', "name modes")
-Channel.__new__.__defaults__ = (None,)
 
 
 class ChannelContext(ShadowAttributesMixin):
@@ -178,16 +173,17 @@ async def on_join(ctx: NetworkContext, message: Message):
     channel = message.params[0]
     lchannel = ctx.chan_lower(channel)
     if ctx.nick_eq(message.prefix.name, ctx.network.nickname):
-        # add channel if not already added
         if lchannel not in ctx.channels:
-            ctx.channels[lchannel] = Channel(channel, [])
+            # we're joining a new channel: create a ChannelContext
+            ctx.channels[lchannel] = ChannelContext(channel, ctx)
 
-    # add nickname to list and join channel. This case is the same for both
-    # when the bot joins and when other users join.
-    if lchannel not in ctx.channels:
+    elif lchannel not in ctx.channels:
         ctx.logger.warn(f'Got message from channel we\'re not in: {message!r}')
         return
 
+    # Add nickname to list and join channel.
+    # This case is the same for both
+    # when we and when other users join.
     lnick = ctx.nick_lower(message.prefix.name)
     ctx.users.setdefault(lnick, message.prefix)
 
@@ -352,14 +348,8 @@ async def init_context(ctx: NetworkContext):
     ctx.message_event('NICK')(on_nick)
     ctx.message_event('QUIT')(on_quit)
 
-    channel_contexts = {}
     channel_event_dispatcher = ChannelEventDispatcher()
     ctx.add_attribute('channel_event', channel_event_dispatcher.decorator)
-
-    @ctx.add_method
-    def get_channel_context(n_ctx: NetworkContext, channel: str):
-        lchannel = n_ctx.chan_lower(channel)
-        return channel_contexts[lchannel]
 
     @ctx.message_event('PRIVMSG')
     @ctx.message_event('NOTICE')
@@ -368,19 +358,19 @@ async def init_context(ctx: NetworkContext):
         lchannel = n_ctx.chan_lower(channel)
 
         opt_chantypes = n_ctx.network.options.get('CHANTYPES', '#&+')
-        if channel.startswith(tuple(opt_chantypes)):
+        if channel[0] in opt_chantypes:
+            assert lchannel in n_ctx.channels
+
             if message.command == 'PRIVMSG':
                 new_message = ChannelMessage.from_message(message)
             else:
                 new_message = ChannelNotice.from_message(message)
+
+            await channel_event_dispatcher.dispatch(ctx.channels[lchannel], new_message)
         else:
             if message.command == 'PRIVMSG':
                 new_message = PrivateMessage.from_message(message)
             else:
                 new_message = PrivateNotice.from_message(message)
 
-        if lchannel not in channel_contexts:
-            c_ctx = ChannelContext(channel, n_ctx)
-            channel_contexts[lchannel] = c_ctx
-
-        await channel_event_dispatcher.dispatch(channel_contexts[lchannel], new_message)
+            # TODO dispatch somewhere
