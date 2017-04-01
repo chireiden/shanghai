@@ -18,7 +18,7 @@
 
 from collections import namedtuple
 
-from shanghai.event import global_event, GlobalEventName, EventDispatcher, Priority
+from shanghai.event import global_event, GlobalEventName, EventDispatcher
 from shanghai.network import NetworkContext
 from shanghai.util import ShadowAttributesMixin
 from shanghai.irc import Prefix, ServerReply
@@ -179,7 +179,7 @@ async def on_part(ctx: NetworkContext, message: Message):
         return
 
     nick = message.prefix.name
-    ctx.remove_nick_from_channel(nick, lchannel)
+    ctx._remove_nick_from_channel(nick, lchannel)
 
 
 async def on_kick(ctx: NetworkContext, message: Message):
@@ -190,7 +190,7 @@ async def on_kick(ctx: NetworkContext, message: Message):
         return
 
     kicked = message.params[1]
-    ctx.remove_nick_from_channel(kicked, lchannel)
+    ctx._remove_nick_from_channel(kicked, lchannel)
 
 
 async def on_nick(ctx: NetworkContext, message: Message):
@@ -221,7 +221,7 @@ async def on_quit(ctx: NetworkContext, message: Message):
 
 
 # Manipulation API
-def remove_nick_from_channel(ctx: NetworkContext, nick, channel):
+def _remove_nick_from_channel(ctx: NetworkContext, nick, channel):
     lnick = ctx.nick_lower(nick)
     lchannel = ctx.nick_lower(channel)
 
@@ -280,7 +280,7 @@ async def init_context(ctx: NetworkContext):
     # _joins is a relational table that connects channels and users
     ctx.add_attribute('_joins', {})  # (l(channel-name), l(nickname)) -> info_dict
 
-    ctx.add_method(remove_nick_from_channel)
+    ctx.add_method(_remove_nick_from_channel)
 
     ctx.message_event(ServerReply.RPL_NAMREPLY)(on_names)
     ctx.message_event(ServerReply.RPL_ENDOFNAMES)(on_names)
