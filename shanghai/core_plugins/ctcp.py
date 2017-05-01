@@ -26,7 +26,7 @@ __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.0.2'
 __plugin_description__ = 'CTCP Message processing'
 
-__plugin_depends__ = ['message']
+__plugin_depends__ = ('message',)
 
 
 class CtcpMessage(Message):

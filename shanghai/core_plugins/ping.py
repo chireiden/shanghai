@@ -27,7 +27,7 @@ __plugin_name__ = 'PING PONG'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Handles pinging and ponging with networks. Yeah.'
 
-__plugin_depends__ = ['message']
+__plugin_depends__ = ('message',)
 
 
 def ms_time() -> int:
