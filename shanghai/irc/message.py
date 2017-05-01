@@ -36,6 +36,9 @@ class Prefix(namedtuple("_Prefix", "name ident host")):
 
     __slots__ = ()
 
+    def __new__(cls, name, ident=None, host=None):
+        return super().__new__(cls, name, ident, host)
+
     @classmethod
     def from_string(cls, prefix: str) -> 'Prefix':
         name = prefix.lstrip(':')

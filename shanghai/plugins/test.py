@@ -23,9 +23,46 @@ __plugin_version__ = 'β.γ.μ'
 __plugin_description__ = 'bla blub'
 
 
+async def channel_message(ctx, message):
+    ctx.logger.debug(f'Got a channel message {message}')
+
+    def unhighlight(nick):
+        return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+
+    if message.words[0] == '!nicks':
+        nick_list = [unhighlight(member.prefix.name)
+                     for member in ctx.members]
+        ctx.say(' '.join(nick_list))
+
+    if message.words[0] == '!names':
+        nick_list = []
+        for member in ctx.members:
+            prefixes = ctx.network_context.options.modes_to_prefixes(member.modes)
+            nick_list.append(f"{prefixes}{unhighlight(member.prefix.name)}")
+        ctx.say(' '.join(nick_list))
+
+    elif message.words[0] == '!channels':
+        chan_list = [f"{_c_ctx.name} ({len(_c_ctx.members)})"
+                     for _c_ctx in ctx.network_context.channels.values()]
+        ctx.say(', '.join(chan_list))
+
+
+async def private_message(ctx, message):
+    ctx.logger.debug(f'Got a private message {message}')
+
+    if message.words[0] == '!say':
+        if len(message.words) >= 3:
+            target_channel = message.words[1]
+            text = ' '.join(message.words[2:])
+            ctx.msg(target_channel, f'{message.sender} told me to say: {text}')
+
+
 # just for testing
 @global_event(GlobalEventName.INIT_NETWORK_CTX)
 async def init_context(ctx):
+    ctx.channel_event('ChannelMessage')(channel_message)
+    ctx.channel_event('PrivateMessage')(private_message)
+
     @ctx.message_event('PRIVMSG')
     async def on_privmsg(ctx, message):
         line = message.params[-1]
@@ -50,3 +87,7 @@ async def init_context(ctx):
             if len(words) == 2:
                 return words[1]
             return ReturnValue.EAT
+
+        elif words[0] == '!quote':
+            _, line_to_send = line.split(maxsplit=1)
+            ctx.send_line(line_to_send)

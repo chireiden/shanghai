@@ -1,0 +1,44 @@
+# Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
+# Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
+#
+# This file is part of Shanghai, an asynchronous multi-server IRC bot.
+#
+# Shanghai is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Shanghai is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
+
+from shanghai.event import GlobalEventName, global_event
+from shanghai.irc import Options, ServerReply
+from shanghai.network import NetworkContext
+
+__plugin_name__ = 'Options'
+__plugin_version__ = '0.1.0'
+__plugin_description__ = 'Handles RPL_ISUPPORT messages'
+
+
+@global_event.core(GlobalEventName.INIT_NETWORK_CTX)
+async def init_context(ctx: NetworkContext):
+    ctx.add_attribute('options', Options())
+
+    ctx.add_staticmethod(ctx.options.nick_lower)
+    ctx.add_staticmethod(ctx.options.chan_lower)
+    ctx.add_staticmethod(ctx.options.nick_eq)
+    ctx.add_staticmethod(ctx.options.chan_eq)
+
+    @ctx.message_event.core(ServerReply.RPL_ISUPPORT)
+    async def on_msg_isupport(ctx, message):
+        ctx.options.extend_from_message(message)
+
+    # TODO find a better way to determine that all 005 messages have been seen
+    @ctx.message_event.core(ServerReply.RPL_LUSERCLIENT)
+    async def on_msg_isupport_end(ctx, message):
+        ctx.logger.info(f"Network supports: {ctx.options}")
