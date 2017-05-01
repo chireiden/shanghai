@@ -26,19 +26,24 @@ __plugin_description__ = 'bla blub'
 async def channel_message(ctx, message):
     ctx.logger.debug(f'Got a channel message {message}')
 
+    def unhighlight(nick):
+        return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+
     if message.words[0] == '!nicks':
+        nick_list = [unhighlight(member.prefix.name)
+                     for member in ctx.members]
+        ctx.say(' '.join(nick_list))
+
+    if message.words[0] == '!names':
         nick_list = []
         for member in ctx.members:
-            nick = member.nickname
-            nick = f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
-            nick_list.append(nick)
+            prefixes = ctx.network_context.options.modes_to_prefixes(member.modes)
+            nick_list.append(f"{prefixes}{unhighlight(member.prefix.name)}")
         ctx.say(' '.join(nick_list))
 
     elif message.words[0] == '!channels':
-        chan_list = []
-        for chanobj in ctx.network_context.channels.values():
-            _c_ctx = ctx.network_context.get_channel_context(chanobj.name)
-            chan_list.append(f'{chanobj.name} ({len(_c_ctx.members)})')
+        chan_list = [f"{_c_ctx.name} ({len(_c_ctx.members)})"
+                     for _c_ctx in ctx.network_context.channels.values()]
         ctx.say(', '.join(chan_list))
 
 
@@ -82,3 +87,7 @@ async def init_context(ctx):
             if len(words) == 2:
                 return words[1]
             return ReturnValue.EAT
+
+        elif words[0] == '!quote':
+            _, line_to_send = line.split(maxsplit=1)
+            ctx.send_line(line_to_send)

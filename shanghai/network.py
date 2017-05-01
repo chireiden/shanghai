@@ -203,10 +203,6 @@ async def init_context(ctx):
             else:
                 ctx.send_cmd('JOIN', channel)
 
-    @ctx.message_event.core(ServerReply.RPL_ISUPPORT)
-    async def on_msg_isupport(ctx, message):
-        ctx.network.options.extend_from_message(message)
-
     @ctx.network_event.core(NetworkEventName.CONNECTED)
     async def register_connection(ctx, _):
         # testing

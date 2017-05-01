@@ -64,7 +64,8 @@ class ShadowAttributesMixin:
         # TODO test how hasattr performs with our __getattr__
         return name in self.__dict__ or name in self._added_attributes
 
-    def add_method(self, name_or_function: Union[str, Callable], function: Callable = None):
+    def add_method(self, name_or_function: Union[str, Callable], function: Callable = None,
+                   *, _static=False):
         """Allows to add methods to an object.
 
         Added functions will be called with an implicit `self` argment,
@@ -82,9 +83,20 @@ class ShadowAttributesMixin:
         else:
             name = name_or_function
 
-        self.add_attribute(name, functools.partial(function, self))
+        if not _static:
+            attr = functools.partial(function, self)
+        else:
+            attr = function
+        self.add_attribute(name, attr)
 
         return function
+
+    def add_staticmethod(self, name_or_function: Union[str, Callable], function: Callable = None):
+        """Allows to add staticmethods to an object.
+
+        Also functions as a decorator and infers the attribute name from the function name.
+        """
+        return self.add_method(name_or_function, function, _static=True)
 
     def remove_attribute(self, name: str):
         """Allows for plugins to remove their added attributes to the network object."""
