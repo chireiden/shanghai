@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections import namedtuple
-from typing import Dict, List
+from typing import Dict, List, Mapping, NamedTuple, Sequence, Union
 
 from .server_reply import ServerReply
 from ..logging import get_default_logger
@@ -32,12 +31,11 @@ _ESCAPE_SEQUENCES = {
 }
 
 
-class Prefix(namedtuple("_Prefix", "name ident host")):
+class Prefix(NamedTuple):
 
-    __slots__ = ()
-
-    def __new__(cls, name, ident=None, host=None):
-        return super().__new__(cls, name, ident, host)
+    name: str
+    ident: str = None
+    host: str = None
 
     @classmethod
     def from_string(cls, prefix: str) -> 'Prefix':
@@ -63,9 +61,9 @@ class Message:
 
     def __init__(self, command: str, *,
                  prefix: Prefix = None,
-                 params: List[str] = None,
-                 tags: Dict[str, str] = None,
-                 raw_line: str = None):
+                 params: Sequence[str] = None,
+                 tags: Mapping[str, Union[str, bool]] = None,
+                 raw_line: str = None) -> None:
         self.command = command
         self.prefix = prefix
         self.params = params if params is not None else []
@@ -99,29 +97,28 @@ class Message:
         return out_value
 
     @classmethod
-    def from_line(cls, line) -> 'Message':
+    def from_line(cls, line: str) -> 'Message':
         # https://tools.ietf.org/html/rfc2812#section-2.3.1
         # http://ircv3.net/specs/core/message-tags-3.2.html
         raw_line = line
-        tags = {}
+        tags: Dict[str, Union[str, bool]] = {}
         prefix = None
 
         if line.startswith('@'):
             # irc tag
-            tag_string, line = line.split(None, 1)
+            tag_string, _, line = line.partition(" ")
             for tag in tag_string[1:].split(';'):
                 if '=' in tag:
                     key, value = tag.split('=', 1)
-                    value = cls.unescape(value)
+                    tags[key] = cls.unescape(value)
                 else:
-                    key, value = tag, True
-                tags[key] = value
+                    tags[tag] = True
 
         if line.startswith(':'):
-            prefix_str, line = line.split(None, 1)
+            prefix_str, _, line = line.partition(" ")
             prefix = Prefix.from_string(prefix_str)
 
-        command, *line = line.split(None, 1)
+        command, _, line = line.partition(" ")
         command = command.upper()  # TODO check if really case-insensitive
         if command.isdigit():
             try:
@@ -129,18 +126,14 @@ class Message:
             except ValueError:
                 get_default_logger().warning(f"unknown server reply code {command}; {raw_line}")
 
-        params = []
-        if line:
-            line = line[0]
-            while line:
-                if line.startswith(':'):
-                    params.append(line[1:])
-                    line = ''
-                else:
-                    param, *line = line.split(None, 1)
-                    params.append(param)
-                    if line:
-                        line = line[0]
+        params: List[str] = []
+        while line:
+            if line.startswith(':'):
+                params.append(line[1:])
+                line = ''
+            else:
+                param, _, line = line.partition(" ")
+                params.append(param)
 
         return cls(command, prefix=prefix, params=params, tags=tags,
                    raw_line=raw_line)

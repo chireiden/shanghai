@@ -133,7 +133,7 @@ class Network:
         while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
             self.logger.debug(event)
-            await self._nw_evt_disp.dispatch(event)
+            await self._nw_evt_disp.dispatch_nwevent(event)
 
     def _close(self, quitmsg: str = None):
         self.logger.info("closing network")
@@ -150,7 +150,7 @@ class Network:
 
 class NetworkContext(ShadowAttributesMixin):
 
-    def __init__(self, network, *, logger: Logger=None):
+    def __init__(self, network, *, logger: Logger=None) -> None:
         super().__init__()
         self.network = network
         if logger is None:

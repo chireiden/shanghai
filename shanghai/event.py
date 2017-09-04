@@ -17,15 +17,17 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
-from collections import namedtuple, defaultdict
 import functools
 import enum
+from typing import Container, DefaultDict, Iterable, MutableMapping, NamedTuple
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
 
-NetworkEvent = namedtuple("NetworkEvent", "name value")
-NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional
+
+class NetworkEvent(NamedTuple):
+    name: str
+    value: str = None
 
 
 class NetworkEventName(str, enum.Enum):
@@ -62,7 +64,7 @@ class Priority(int, enum.Enum):
             return priority
 
 
-class _PrioritizedSetList:
+class _PrioritizedSetList(Iterable, Container):
 
     """Manages a list of sets, keyed by a priority level.
 
@@ -138,8 +140,12 @@ class EventDispatcher:
 
     """Allows to register handlers and to dispatch events to said handlers, by priority."""
 
-    def __init__(self, logger: Logger = None):
-        self.event_map = defaultdict(_PrioritizedSetList)
+    event_map: MutableMapping[str, _PrioritizedSetList]
+    logger: Logger
+    decorator: EventDecorator
+
+    def __init__(self, logger: Logger = None) -> None:
+        self.event_map = DefaultDict(_PrioritizedSetList)
         self.logger = logger or get_default_logger()
 
         self.decorator = EventDecorator(self)
@@ -218,7 +224,7 @@ class NetworkEventDispatcher(EventDispatcher):
         self.context = context
         self.decorator.allowed_names = set(NetworkEventName.__members__.values())
 
-    async def dispatch(self, event: NetworkEvent):
+    async def dispatch_nwevent(self, event: NetworkEvent):
         return await super().dispatch(event.name, self.context, event.value)
 
 

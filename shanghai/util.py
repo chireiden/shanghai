@@ -17,7 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import functools
-from typing import Union, Callable
+from typing import Union, Callable, cast
 
 from fullqualname import fullqualname
 
@@ -84,7 +84,8 @@ class ShadowAttributesMixin:
             name = name_or_function
 
         if not _static:
-            attr = functools.partial(function, self)
+            # mypy error fixed by https://github.com/python/mypy/pull/3132
+            attr = cast(Callable, functools.partial(function, self))
         else:
             attr = function
         self.add_attribute(name, attr)
@@ -112,6 +113,6 @@ class ShadowAttributesMixin:
         #     super().__getattr__(name)
 
 
-def repr_func(func: callable) -> str:
+def repr_func(func: Callable) -> str:
     """Represent a function with its full qualname instead of just its name and an address."""
     return f"<{type(func).__name__} {fullqualname(func)}>"

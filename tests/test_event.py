@@ -203,7 +203,7 @@ class TestEventDispatchers:
             called = True
 
         dispatcher.register("name", coroutinefunc)
-        loop.run_until_complete(dispatcher.dispatch(evt))
+        loop.run_until_complete(dispatcher.dispatch_nwevent(evt))
 
         assert called
 

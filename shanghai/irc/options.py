@@ -16,9 +16,9 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from collections.abc import MutableMapping
 import re
 import string
+from typing import MutableMapping, Union
 
 from .message import Message
 from .server_reply import ServerReply
@@ -27,7 +27,7 @@ from .server_reply import ServerReply
 DEFAULT_CASE_MAPPING = 'rfc1459'
 
 
-def _generate_case_table(case_mapping):
+def _generate_case_table(case_mapping: str):
     case_mapping = case_mapping.lower()
     if case_mapping not in ('ascii', 'rfc1459', 'strict-rfc1459'):
         # TODO log warning
@@ -46,7 +46,7 @@ def _generate_case_table(case_mapping):
 # TODO evaluate against specs
 # http://www.irc.org/tech_docs/005.html
 # http://www.irc.org/tech_docs/draft-brocklesby-irc-isupport-03.txt
-class Options(MutableMapping):
+class Options(MutableMapping[str, Union[str, bool]]):
 
     """A case insensitive mapping of 005 RPL_ISUPPORT settings and convenience functions."""
 
@@ -54,7 +54,7 @@ class Options(MutableMapping):
     user_prefixes = '@+'
     _case_table = _generate_case_table(DEFAULT_CASE_MAPPING)
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self._options = {k.upper(): v for k, v in kwargs.items()}
 
     def __setitem__(self, key, value):
@@ -89,9 +89,10 @@ class Options(MutableMapping):
 
         for option in message.params[1:-1]:
             key, is_not_bool, value = option.partition('=')
-            if not is_not_bool:
-                value = True
-            self[key] = value
+            if is_not_bool:
+                self[key] = value
+            else:
+                self[key] = True
 
     def _parse_prefix(self, value):
         if not value:

@@ -27,7 +27,7 @@ class Connection:
 
     def __init__(self, server: Server, queue,
                  loop: asyncio.AbstractEventLoop = None,
-                 logger: Logger = None):
+                 logger: Logger = None) -> None:
         self.server = server
         self.queue = queue
         self.loop = loop
