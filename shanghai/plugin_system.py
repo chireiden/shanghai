@@ -111,11 +111,12 @@ class Plugin:
 
 class PluginSystem:
     if sys.platform == 'win32':
-        # %APPDATA%/shanghai/plugins
         _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai"))
     else:
-        # ~/.config/shanghai/plugins
-        _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
+        if 'XDG_CONFIG_HOME' in os.environ:
+            _home_config_path = pathlib.Path(os.path.expandvars("$XDG_CONFIG_HOME/shanghai"))
+        else:
+            _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
 
     _shanghai_base_path = pathlib.Path(__file__).parent
 
@@ -148,7 +149,7 @@ class PluginSystem:
         sys.modules[f'{__package__}.{namespace}'] = self
 
         if is_core:
-            # just search in one single path
+            # just search in base path
             self.plugin_search_paths = [pathlib.Path(self._shanghai_base_path, namespace)]
         else:
             self.plugin_search_paths = [pathlib.Path(base_path, namespace)
