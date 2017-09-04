@@ -17,6 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
+from typing import Any, Dict
 
 from .network import Network
 from .plugin_system import PluginSystem
@@ -28,7 +29,7 @@ class Shanghai:
 
     def __init__(self, config, loop=None):
         self.config = config
-        self.networks = {}
+        self.networks: Dict[str, Dict[str, Any]] = {}
         self.loop = loop
 
         self.core_plugins = PluginSystem('core_plugins', is_core=True)

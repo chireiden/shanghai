@@ -19,7 +19,7 @@
 import asyncio
 
 from .config import Server
-from .event import NetworkEvent
+from .event import NetworkEvent, NetworkEventName
 from .logging import Logger, get_default_logger
 
 
@@ -61,7 +61,8 @@ class Connection:
                 line = line.strip()
                 self.logger.debug(">", line)
                 if line:
-                    await self.queue.put(NetworkEvent('raw_line', line))
+                    event = NetworkEvent(NetworkEventName.RAW_LINE, line)
+                    await self.queue.put(event)
         except asyncio.CancelledError:
             self.logger.info("Connection.run was cancelled")
         except ConnectionResetError as e:

@@ -22,7 +22,6 @@ import pathlib
 import os
 import sys
 from typing import Dict, Iterable, NamedTuple, Union
-# from typing import Dict, Iterable, NamedTuple, Union  # noqa: F401
 from types import ModuleType
 import keyword
 
@@ -130,6 +129,8 @@ class PluginSystem:
         _shanghai_base_path,
     ]
 
+    plugin_registry: Dict[str, Plugin]
+
     def __init__(self, namespace, is_core=False):
         # TODO add search base paths parameter
         if not namespace.isidentifier():
@@ -162,7 +163,7 @@ class PluginSystem:
         raise AttributeError(item)
 
     def load_all_plugins(self):
-        plugins_to_load = {}
+        plugins_to_load: Dict[str, pathlib.Path] = {}
 
         for search_path in self.plugin_search_paths:
             for module_path in search_path.glob("*.py"):

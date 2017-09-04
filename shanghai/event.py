@@ -19,7 +19,8 @@
 import asyncio
 import functools
 import enum
-from typing import Container, DefaultDict, Iterable, MutableMapping, NamedTuple
+from typing import (Container, DefaultDict, Hashable, Iterable, List, MutableMapping, NamedTuple,
+                    Set, Tuple, Union)
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
@@ -27,7 +28,7 @@ from .util import repr_func
 
 class NetworkEvent(NamedTuple):
     name: str
-    value: str = None
+    value: Union[str, bytes, None] = None
 
 
 class NetworkEventName(str, enum.Enum):
@@ -64,17 +65,19 @@ class Priority(int, enum.Enum):
             return priority
 
 
-class _PrioritizedSetList(Iterable, Container):
+class _PrioritizedSetList(Iterable[Hashable], Container[Hashable]):
 
     """Manages a list of sets, keyed by a priority level.
 
     Is always sorted by the level (descending).
     """
 
+    list: List[Tuple[int, Set[Hashable]]]
+
     def __init__(self):
         self.list = list()
 
-    def add(self, priority: int, obj):
+    def add(self, priority: int, obj: Hashable):
         if obj in self:
             raise ValueError(f"Object {obj!r} has already been added")
 
@@ -214,7 +217,8 @@ class GlobalEventDispatcher(EventDispatcher):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.decorator.allowed_names = set(GlobalEventName.__members__.values())
+        # Supposedly fixed in https://github.com/python/typeshed/pull/1195
+        self.decorator.allowed_names = set(GlobalEventName.__members__.values())  # type: ignore
 
 
 class NetworkEventDispatcher(EventDispatcher):
@@ -222,10 +226,10 @@ class NetworkEventDispatcher(EventDispatcher):
     def __init__(self, context, *args, **kwargs):
         super().__init__()
         self.context = context
-        self.decorator.allowed_names = set(NetworkEventName.__members__.values())
+        self.decorator.allowed_names = set(NetworkEventName.__members__.values())  # type: ignore
 
     async def dispatch_nwevent(self, event: NetworkEvent):
-        return await super().dispatch(event.name, self.context, event.value)
+        return await self.dispatch(event.name, self.context, event.value)
 
 
 global_dispatcher = GlobalEventDispatcher()

@@ -17,7 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import functools
-from typing import Union, Callable, cast
+from typing import Any, Callable, Dict, Union, cast
 
 from fullqualname import fullqualname
 
@@ -36,10 +36,11 @@ class ShadowAttributesMixin:
     use `remove_attribute`.
     """
 
-    def __init__(self, *args, **kwargs):
-        self._added_attributes = dict()
+    _added_attributes: Dict[str, Any]
 
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__()
+        self._added_attributes = {}
 
     def add_attribute(self, name: str, value=None):
         """Allows to add attributes to an object.

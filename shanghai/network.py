@@ -21,6 +21,7 @@ import io
 import itertools
 import re
 import time
+from typing import List
 
 from .connection import Connection
 from .event import (NetworkEvent, GlobalEventName, NetworkEventName,
@@ -31,8 +32,25 @@ from .logging import get_logger, Logger
 from .util import ShadowAttributesMixin
 
 
+class NetworkContext(ShadowAttributesMixin):
+
+    def __init__(self, network, *, logger: Logger=None) -> None:
+        super().__init__()
+        self.network = network
+        if logger is None:
+            logger = network.logger
+        self.logger = logger
+
+    def send_bytes(self, line: bytes):
+        self.network.send_bytes(line)
+
+
 class Network:
     """Sample Network class"""
+
+    event_queue: asyncio.Queue
+    _connection: Connection
+    _context: NetworkContext
 
     def __init__(self, config, loop=None):
         self.name = config.name
@@ -40,12 +58,8 @@ class Network:
         self.loop = loop
         self.logger = get_logger('network', self.name, config)
 
-        self.event_queue = None
-
         self._server_iter = itertools.cycle(self.config.servers)
-        self._connection = None
-        self._context = None
-        self._worker_task_failure_timestamps = []
+        self._worker_task_failure_timestamps: List[int] = []
 
         self._reset()
 
@@ -146,19 +160,6 @@ class Network:
     def request_close(self, quitmsg: str = None):
         event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         self.event_queue.put_nowait(event)
-
-
-class NetworkContext(ShadowAttributesMixin):
-
-    def __init__(self, network, *, logger: Logger=None) -> None:
-        super().__init__()
-        self.network = network
-        if logger is None:
-            logger = network.logger
-        self.logger = logger
-
-    def send_bytes(self, line: bytes):
-        self.network.send_bytes(line)
 
 
 # Core event handlers #############################################################################
