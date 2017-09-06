@@ -217,7 +217,7 @@ class GlobalEventDispatcher(EventDispatcher):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Supposedly fixed in https://github.com/python/typeshed/pull/1195
+        # https://github.com/python/typeshed/issues/1590
         self.decorator.allowed_names = set(GlobalEventName.__members__.values())  # type: ignore
 
 
@@ -226,6 +226,7 @@ class NetworkEventDispatcher(EventDispatcher):
     def __init__(self, context, *args, **kwargs):
         super().__init__()
         self.context = context
+        # https://github.com/python/typeshed/issues/1590
         self.decorator.allowed_names = set(NetworkEventName.__members__.values())  # type: ignore
 
     async def dispatch_nwevent(self, event: NetworkEvent):
