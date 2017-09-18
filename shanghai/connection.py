@@ -25,9 +25,12 @@ from .logging import Logger, get_default_logger
 
 class Connection:
 
-    def __init__(self, server: Server, queue,
+    def __init__(self,
+                 server: Server,
+                 queue: asyncio.Queue,
                  loop: asyncio.AbstractEventLoop = None,
-                 logger: Logger = None) -> None:
+                 logger: Logger = None,
+                 ) -> None:
         self.server = server
         self.queue = queue
         self.loop = loop
@@ -37,16 +40,16 @@ class Connection:
 
         self.writer = None  # type: asyncio.StreamWriter
 
-    def writeline(self, line: bytes):
+    def writeline(self, line: bytes) -> None:
         self.logger.info("<", line)
         self.writer.write(line)
         self.writer.write(b'\r\n')
 
-    def close(self):
+    def close(self) -> None:
         self.logger.debug("closing connection")
         self.writer.close()
 
-    async def run(self):
+    async def run(self) -> None:
         self.logger.info(f"connecting to {self.server}...")
         reader, writer = await asyncio.open_connection(
             self.server.host, self.server.port, ssl=self.server.ssl, loop=self.loop

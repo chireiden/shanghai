@@ -21,49 +21,61 @@ import io
 import itertools
 import re
 import time
-from typing import List
+from typing import Any, Iterator, List, Optional, cast
+from typing.re import Match
 
 from .connection import Connection
+from .config import NetworkConfiguration, Server
 from .event import (NetworkEvent, GlobalEventName, NetworkEventName,
                     global_dispatcher, global_event, Priority,
                     NetworkEventDispatcher)
-from .irc import Options, ServerReply
+from .irc import Message, Options, ServerReply
 from .logging import get_logger, Logger
 from .util import ShadowAttributesMixin
 
 
 class NetworkContext(ShadowAttributesMixin):
 
-    def __init__(self, network, *, logger: Logger=None) -> None:
+    def __init__(self, network: 'Network', *, logger: Logger=None) -> None:
         super().__init__()
         self.network = network
         if logger is None:
             logger = network.logger
         self.logger = logger
 
-    def send_bytes(self, line: bytes):
+    def send_bytes(self, line: bytes) -> None:
         self.network.send_bytes(line)
 
 
 class Network:
     """Sample Network class"""
 
+    registered: bool
+    nickname: Optional[str]
+    user: Optional[str]
+    realname: Optional[str]
+    vhost: Optional[str]
+    options: Options
+
     event_queue: asyncio.Queue
     _connection: Connection
     _context: NetworkContext
+    _worker_task: Optional[asyncio.Task]
+    _connection_task: Optional[asyncio.Task]
 
-    def __init__(self, config, loop=None):
+    def __init__(self, config: NetworkConfiguration, loop: asyncio.AbstractEventLoop = None) \
+            -> None:
         self.name = config.name
         self.config = config
-        self.loop = loop
+        self.loop = loop or asyncio.get_event_loop()
         self.logger = get_logger('network', self.name, config)
 
-        self._server_iter = itertools.cycle(self.config.servers)
-        self._worker_task_failure_timestamps: List[int] = []
+        self._server_iter: Iterator[Server] = itertools.cycle(self.config.servers)
+        self._worker_task_failure_timestamps: List[float] = []
 
         self._reset()
 
-    def _reset(self):
+    def _reset(self) -> None:
         self.registered = False
         self.nickname = None
         self.user = None
@@ -80,7 +92,7 @@ class Network:
         self.event_queue = asyncio.Queue()
         self._connection = Connection(server, self.event_queue, self.loop, logger=self.logger)
 
-    async def _build_context(self):
+    async def _build_context(self) -> NetworkContext:
         ctx = NetworkContext(self)
         self.logger.debug("building context")
 
@@ -92,13 +104,13 @@ class Network:
 
         return ctx
 
-    async def run(self):
+    async def run(self) -> None:
         self._context = await self._build_context()
         self.logger.debug("context:", self._context)
 
         for retry in itertools.count(1):
-            self._connection_task = asyncio.ensure_future(self._connection.run())
-            self._worker_task = asyncio.ensure_future(self._worker())
+            self._connection_task = self.loop.create_task(self._connection.run())
+            self._worker_task = self.loop.create_task(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
 
             try:
@@ -117,8 +129,11 @@ class Network:
             await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
             self._reset()
 
-    def _worker_done(self, task):
+    def _worker_done(self, task: asyncio.Future) -> None:
+        # Task.add_done_callback expects a Future as the argument of the callable.
+        # https://github.com/python/typeshed/pull/1614
         assert task is self._worker_task
+        task = cast(asyncio.Task, task)
         if task.cancelled():
             self._connection_task.cancel()
         else:
@@ -139,25 +154,25 @@ class Network:
                     return
 
             self.logger.warning("Restarting worker task")
-            self._worker_task = asyncio.ensure_future(self._worker())
+            self._worker_task = self.loop.create_task(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
 
-    async def _worker(self):
+    async def _worker(self) -> None:
         """Dispatches events from the event queue."""
         while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
             self.logger.debug(event)
             await self._nw_evt_disp.dispatch_nwevent(event)
 
-    def _close(self, quitmsg: str = None):
+    def _close(self, quitmsg: str = None) -> None:
         self.logger.info("closing network")
         self._connection.close()
         self.stopped = True
 
-    def send_bytes(self, line: bytes):
+    def send_bytes(self, line: bytes) -> None:
         self._connection.writeline(line)
 
-    def request_close(self, quitmsg: str = None):
+    def request_close(self, quitmsg: str = None) -> None:
         event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         self.event_queue.put_nowait(event)
 
@@ -165,21 +180,21 @@ class Network:
 # Core event handlers #############################################################################
 
 @global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.CORE)
-async def init_context(ctx):
+async def init_context(ctx: NetworkContext) -> None:
     ctx.logger.debug("running init_context in network.py")
 
     @ctx.network_event.core(NetworkEventName.CONNECTED)
-    async def on_connected(ctx, _):
+    async def on_connected(ctx: NetworkContext, _: Any) -> None:
         ctx.network.connected = True
         ctx.logger.info("connected!")
 
     @ctx.network_event.core(NetworkEventName.DISCONNECTED)
-    async def on_disconnected(ctx, _):
+    async def on_disconnected(ctx: NetworkContext, _: Any) -> None:
         ctx.logger.info('connection closed by peer!')
 
     @ctx.network_event(NetworkEventName.CLOSE_REQUEST, priority=Priority.POST_CORE)
     # Lower than core to allow core plugins to eat the event
-    async def on_close_request(ctx, _):
+    async def on_close_request(ctx: NetworkContext, _: Any) -> None:
         if ctx.network.connected:
             ctx.logger.info('closing connection')
             ctx.network._close()
@@ -193,7 +208,7 @@ async def init_context(ctx):
             ctx.network.stopped = True
 
     @ctx.message_event.core(ServerReply.RPL_WELCOME)
-    async def on_msg_welcome(ctx, message):
+    async def on_msg_welcome(ctx: NetworkContext, message: Message) -> None:
         ctx.network.nickname = message.params[0]
         ctx.send_cmd('MODE', ctx.network.nickname, '+B')
 
@@ -206,18 +221,18 @@ async def init_context(ctx):
                 ctx.send_cmd('JOIN', channel)
 
     @ctx.network_event.core(NetworkEventName.CONNECTED)
-    async def register_connection(ctx, _):
+    async def register_connection(ctx: NetworkContext, _: Any) -> None:
         # testing
         network = ctx.network
-        network.original_nickname = network.nickname = network.config['nick']
+        network.nickname = network.config['nick']
         network.user = network.config['user']
         network.realname = network.config['realname']
         ctx.send_cmd('NICK', network.nickname)
         ctx.send_cmd('USER', network.user, '*', '*', network.realname)
 
         @ctx.message_event.core(ServerReply.ERR_NICKNAMEINUSE)
-        async def nick_in_use(ctx, _):
-            def inc_suffix(m):
+        async def nick_in_use(ctx: NetworkContext, _: Any) -> None:
+            def inc_suffix(m: Match) -> str:
                 num = m.group(1) or 0
                 return str(int(num) + 1)
             ctx.network.nickname = re.sub(r"(\d*)$", inc_suffix, ctx.network.nickname)
@@ -225,6 +240,6 @@ async def init_context(ctx):
 
         # Clear the above hooks since we only want to negotiate a nick until we found a free one
         @ctx.message_event.core(ServerReply.RPL_WELCOME)
-        async def register_done(ctx, _):
+        async def register_done(ctx: NetworkContext, _: Any) -> None:
             nick_in_use.unregister()
             register_done.unregister()

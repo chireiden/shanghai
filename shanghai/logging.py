@@ -16,13 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
+import datetime
 from enum import Enum
 import functools
 import hashlib
 import io
 import logging
 import os
+from typing import Any, Callable, Optional, cast
 
 import colorama
 import pytz
@@ -45,12 +46,12 @@ class LogLevels(int, Enum):
 logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
 
 
-def _print_like(func):
+def _print_like(func: Callable) -> Callable[..., None]:
     @functools.wraps(func)
-    def _wrap(self, *args, **kwargs):
+    def _wrap(self: Logger, *args: Any, **kwargs: Any) -> None:
         f = io.StringIO()
         print(*args, file=f)
-        return func(self, f.getvalue().strip(), **kwargs)
+        func(self, f.getvalue().strip(), **kwargs)
     return _wrap
 
 
@@ -65,7 +66,7 @@ class Logger(logging.Logger):
     exception = _print_like(logging.Logger.exception)
     critical = _print_like(logging.Logger.critical)
 
-    def ddebug(self, *args, **kwargs):
+    def ddebug(self, *args: Any, **kwargs: Any) -> None:
         f = io.StringIO()
         print(*args, file=f)
         self.log(LogLevels.DDEBUG, f.getvalue().strip(), **kwargs)
@@ -73,7 +74,7 @@ class Logger(logging.Logger):
 
 class FileHandler(logging.FileHandler):
 
-    def __init__(self, filename):
+    def __init__(self, filename: str) -> None:
         filename = os.path.abspath(filename)
         basedir = os.path.dirname(filename)
         os.makedirs(basedir, 0o755, exist_ok=True)
@@ -89,7 +90,7 @@ class TerminalColor(str, Enum):
     CRITICAL = colorama.Fore.RED + colorama.Style.BRIGHT + colorama.Back.YELLOW
 
     @classmethod
-    def for_level(cls, level):
+    def for_level(cls, level: int) -> str:
         # mypy has issues here. https://github.com/python/mypy/issues/3622
         for log_level in sorted(LogLevels, reverse=True):  # type: ignore
             if level >= log_level.value:  # type: ignore
@@ -99,7 +100,8 @@ class TerminalColor(str, Enum):
 
 class Formatter(logging.Formatter):
 
-    def __init__(self, context, name, tz, terminal=False):
+    def __init__(self, context: str, name: str, tz: datetime.tzinfo, terminal: bool = False) \
+            -> None:
         super().__init__()
         self._context = context
         self._name = name
@@ -108,8 +110,8 @@ class Formatter(logging.Formatter):
 
     _max_logging_level_length = len("CRITICAL")
 
-    def format(self, record: logging.LogRecord):
-        now = datetime.now(tz=self._tz)
+    def format(self, record: logging.LogRecord) -> str:
+        now = datetime.datetime.now(tz=self._tz)
         data = dict(
             context=self._context,
             name=self._name,
@@ -148,7 +150,7 @@ class Formatter(logging.Formatter):
         return s
 
 
-def set_default_logger(logger: Logger):
+def set_default_logger(logger: Logger) -> None:
     global _default_logger
     _default_logger = logger
 
@@ -158,7 +160,10 @@ def get_default_logger() -> Logger:
     return _default_logger
 
 
-def get_logger(context, name, config=None, open_msg=False):
+def get_logger(context: str, name: str,
+               config: Optional[Configuration] = None,
+               open_msg: bool = False,
+               ) -> Logger:
     """
     context: i.e. 'network', 'channel', 'core', whatvever.
     name: some preferably unique name inside of context
@@ -170,7 +175,7 @@ def get_logger(context, name, config=None, open_msg=False):
     logging.setLoggerClass(Logger)
     # use a hashed version to avoid it containing dots.
     hashed_name = hashlib.sha256(name.lower().encode('utf-8')).hexdigest()[:12]
-    logger = logging.getLogger(f'{context.lower()}.{hashed_name}')
+    logger = cast(Logger, logging.getLogger(f'{context.lower()}.{hashed_name}'))
 
     # TODO cache timezone
     tzname = os.environ.get('TZ', None)
@@ -188,7 +193,7 @@ def get_logger(context, name, config=None, open_msg=False):
         tzname = 'UTC'
 
     timezone = pytz.timezone(tzname)
-    now = datetime.now(tz=timezone)
+    now = datetime.datetime.now(tz=timezone)
     name_attributes = dict(context=context, name=name, date=now)
 
     level = config.get('logging.level', 'INFO')

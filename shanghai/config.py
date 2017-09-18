@@ -17,8 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 from collections import abc as c_abc
-from types import SimpleNamespace
-from typing import Any, Iterable, List, Mapping, cast
+from typing import Any, Iterable, List, NamedTuple, Mapping, Optional, cast
 
 from ruamel import yaml as ryaml
 
@@ -27,23 +26,28 @@ class ConfigurationError(ValueError):
     pass
 
 
-class Server(SimpleNamespace):
-    _default_ports = {True: 6697, False: 6667}
+class Server(NamedTuple):
 
-    def __init__(self, host: str, port: int = None, ssl: bool = False) -> None:
-        if port is None:
-            port = self._default_ports[ssl]
-        super().__init__(host=host, port=port, ssl=ssl)
+    host: str
+    port: int = None
+    ssl: bool = False
 
     @classmethod
-    def from_string(cls, string) -> 'Server':
-        host, _, port = string.partition(":")
-        _, ssl, port = port.rpartition("+")
-        port = int(port) if port else None
-        ssl = bool(ssl)
+    def with_optional_port(cls, host: str, port: Optional[int] = None, ssl: bool = False) \
+            -> 'Server':
+        if port is None:
+            port = 6697 if ssl else 6667
         return cls(host, port, ssl)
 
-    def __str__(self):
+    @classmethod
+    def from_string(cls, string: str) -> 'Server':
+        host, _, port_str = string.partition(":")
+        _, ssl_str, port_str = port_str.rpartition("+")
+        port = int(port_str) if port_str else None
+        ssl = bool(ssl_str)
+        return cls.with_optional_port(host, port, ssl)
+
+    def __str__(self) -> str:
         return f"{self.host}:{'+' if self.ssl else ''}{self.port}"
 
 

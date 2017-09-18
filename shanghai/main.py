@@ -21,6 +21,7 @@ from functools import partial
 import io
 from pprint import pprint
 import sys
+from typing import Any, Awaitable, Callable, Dict
 
 import colorama
 
@@ -30,7 +31,7 @@ from .event import global_dispatcher
 from .logging import set_default_logger, get_logger, LogLevels
 
 
-def exception_handler(loop, context):  # pylint: disable=unused-argument
+def exception_handler(loop: asyncio.AbstractEventLoop, context: Dict[str, Any]) -> None:
     f = io.StringIO()
     print("Unhandled Exception", file=f)
     print("Message: ", context['message'], file=f)
@@ -48,7 +49,9 @@ def exception_handler(loop, context):  # pylint: disable=unused-argument
     logger.error(f.getvalue())
 
 
-async def stdin_reader(loop, input_handler):
+async def stdin_reader(loop: asyncio.AbstractEventLoop,
+                       input_handler: Callable[[str], Awaitable]
+                       ) -> None:
     if sys.platform == 'win32':
         # Windows can't use SelectorEventLoop.connect_read_pipe
         # and ProactorEventLoop.connect_read_pipe apparently
@@ -71,7 +74,7 @@ async def stdin_reader(loop, input_handler):
                     break
                 if not line:
                     break
-                loop.call_soon_threadsafe(lambda: asyncio.ensure_future(input_handler(line)))
+                loop.call_soon_threadsafe(lambda: loop.create_task(input_handler(line)))
 
             loop.call_soon_threadsafe(lambda: thread_close_evt.set())
 
@@ -80,19 +83,20 @@ async def stdin_reader(loop, input_handler):
 
     else:
         reader = asyncio.StreamReader()
-        await loop.connect_read_pipe(partial(asyncio.StreamReaderProtocol, reader), sys.stdin)
+        make_protocol = partial(asyncio.StreamReaderProtocol, reader)
+        await loop.connect_read_pipe(make_protocol, sys.stdin)  # type: ignore
 
         while True:
             line_bytes = await reader.readline()
             line = line_bytes.decode(sys.stdin.encoding)
             if not line:
                 break
-            asyncio.ensure_future(input_handler(line), loop=loop)
+            loop.create_task(input_handler(line))
 
         print("stdin stream closed")
 
 
-def main():
+def main() -> None:
     colorama.init()
 
     config = ShanghaiConfiguration.from_filename('shanghai.yaml')
@@ -118,7 +122,7 @@ def main():
     loop.set_exception_handler(exception_handler)
 
     # For debugging purposes mainly
-    async def input_handler(line):
+    async def input_handler(line: str) -> None:
         """Handle stdin input while running. Send lines to networks."""
         split = line.split(None, 1)
         if len(split) < 2:

@@ -43,7 +43,7 @@ class PluginInfo(NamedTuple):
     conflicts: Iterable[str] = ()
 
     @classmethod
-    def read_from_file(cls, path: pathlib.Path, identifier: str):
+    def read_from_file(cls, path: pathlib.Path, identifier: str) -> 'PluginInfo':
         with path.open('r', encoding='utf-8') as f:
             tree = ast.parse(f.read(), str(path))
 
@@ -104,9 +104,9 @@ class Plugin:
         self.logger = get_logger(namespace, self.identifier)
         self.module_name = module.__name__
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (f"<Plugin {self.module_name}:"
-                f" {self.info['name']} {self.info['version']} - {self.info['description']}>")
+                f" {self.info.name} {self.info.version} - {self.info.description}>")
 
 
 class PluginSystem:
@@ -131,7 +131,7 @@ class PluginSystem:
 
     plugin_registry: Dict[str, Plugin]
 
-    def __init__(self, namespace, is_core=False):
+    def __init__(self, namespace: str, is_core: bool = False) -> None:
         # TODO add search base paths parameter
         if not namespace.isidentifier():
             raise ValueError("Invalid plugin namespace."
@@ -157,12 +157,12 @@ class PluginSystem:
         self.plugin_registry = {}
         self.logger = get_default_logger()
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> ModuleType:
         if item in self.plugin_registry:
             return self.plugin_registry[item].module
         raise AttributeError(item)
 
-    def load_all_plugins(self):
+    def load_all_plugins(self) -> None:
         plugins_to_load: Dict[str, pathlib.Path] = {}
 
         for search_path in self.plugin_search_paths:
@@ -183,7 +183,10 @@ class PluginSystem:
                 self.logger.exception(f"Unable to load plugin {identifier!r}: {e!s}")
             self._register_plugin(plugin)
 
-    def load_plugin(self, identifier, *, dependency_path=(), is_core=False):
+    def load_plugin(self, identifier: str, *,
+                    dependency_path: Iterable[str] = (),
+                    is_core: bool = False,
+                    ) -> Plugin:
         if not identifier.isidentifier():
             raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
         if keyword.iskeyword(identifier):
@@ -212,7 +215,7 @@ class PluginSystem:
         self._register_plugin(plugin)
         return plugin
 
-    def _register_plugin(self, plugin):
+    def _register_plugin(self, plugin: Plugin) -> None:
         self.plugin_registry[plugin.identifier] = plugin
         sys.modules[plugin.module_name] = plugin.module
         self.logger.debug(f"Setting sys.modules[{plugin.module_name!r}] to {plugin.module}")
@@ -228,7 +231,8 @@ class PluginSystem:
         raise OSError(f"Error trying to load {str(path)!r}")
 
     def _load_plugin_as_module(self, path: pathlib.Path, identifier: str, *,
-                               dependency_path: Iterable[str] = ()):
+                               dependency_path: Iterable[str] = (),
+                               ) -> Plugin:
         info = PluginInfo.read_from_file(path, identifier)
 
         # TODO info.conflicts
