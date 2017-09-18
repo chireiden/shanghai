@@ -25,10 +25,12 @@ from .logging import Logger, get_default_logger
 
 class Connection:
 
+    writer: asyncio.StreamWriter
+
     def __init__(self,
                  server: Server,
                  queue: asyncio.Queue,
-                 loop: asyncio.AbstractEventLoop = None,
+                 loop: asyncio.AbstractEventLoop,
                  logger: Logger = None,
                  ) -> None:
         self.server = server
@@ -37,8 +39,6 @@ class Connection:
         if logger is None:
             logger = get_default_logger()
         self.logger = logger
-
-        self.writer = None  # type: asyncio.StreamWriter
 
     def writeline(self, line: bytes) -> None:
         self.logger.info("<", line)

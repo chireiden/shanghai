@@ -253,6 +253,8 @@ class PluginSystem:
         spec = importlib.util.spec_from_file_location(module_name, str(path))
 
         module = importlib.util.module_from_spec(spec)
+        if spec.loader is None:
+            raise ImportError("No loader for module available")
         spec.loader.exec_module(module)
         self.logger.info("Found plugin in", module.__file__)
 

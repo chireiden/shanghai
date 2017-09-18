@@ -29,7 +29,7 @@ class ConfigurationError(ValueError):
 class Server(NamedTuple):
 
     host: str
-    port: int = None
+    port: int
     ssl: bool = False
 
     @classmethod

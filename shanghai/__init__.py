@@ -28,11 +28,10 @@ __all__ = ('Shanghai')
 
 class Shanghai:
 
-    def __init__(self, config: ShanghaiConfiguration, loop: asyncio.AbstractEventLoop = None) \
-            -> None:
+    def __init__(self, config: ShanghaiConfiguration, loop: asyncio.AbstractEventLoop) -> None:
         self.config = config
-        self.networks: Dict[str, Dict[str, Any]] = {}
         self.loop = loop
+        self.networks: Dict[str, Dict[str, Any]] = {}
 
         self.core_plugins = PluginSystem('core_plugins', is_core=True)
         # TODO: load plugins from configurable location(s)

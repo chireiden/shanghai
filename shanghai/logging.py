@@ -30,7 +30,7 @@ import pytz
 
 from .config import Configuration
 
-_default_logger = None
+_default_logger: Optional['Logger'] = None
 
 
 class LogLevels(int, Enum):
@@ -78,7 +78,7 @@ class FileHandler(logging.FileHandler):
         filename = os.path.abspath(filename)
         basedir = os.path.dirname(filename)
         os.makedirs(basedir, 0o755, exist_ok=True)
-        super().__init__(filename, 'a', 'utf-8', None)
+        super().__init__(filename, 'a', 'utf-8')
 
 
 class TerminalColor(str, Enum):
@@ -156,8 +156,12 @@ def set_default_logger(logger: Logger) -> None:
 
 
 def get_default_logger() -> Logger:
-    global _default_logger
-    return _default_logger
+    if _default_logger:
+        return _default_logger
+    else:
+        logger = get_logger('logging', 'default', None, open_msg=True)
+        set_default_logger(logger)
+        return logger
 
 
 def get_logger(context: str, name: str,

@@ -51,17 +51,17 @@ class Network:
     """Sample Network class"""
 
     registered: bool
-    nickname: Optional[str]
-    user: Optional[str]
-    realname: Optional[str]
-    vhost: Optional[str]
+    nickname: str
+    user: str
+    realname: str
+    vhost: str
     options: Options
 
     event_queue: asyncio.Queue
     _connection: Connection
     _context: NetworkContext
-    _worker_task: Optional[asyncio.Task]
-    _connection_task: Optional[asyncio.Task]
+    _worker_task: asyncio.Task
+    _connection_task: asyncio.Task
 
     def __init__(self, config: NetworkConfiguration, loop: asyncio.AbstractEventLoop = None) \
             -> None:
@@ -77,14 +77,12 @@ class Network:
 
     def _reset(self) -> None:
         self.registered = False
-        self.nickname = None
-        self.user = None
-        self.realname = None
-        self.vhost = None
+        self.nickname = ""
+        self.user = ""
+        self.realname = ""
+        self.vhost = ""
         self.options = Options()
 
-        self._connection_task = None
-        self._worker_task = None
         self.stopped = False
         self.connected = False
 
@@ -232,7 +230,7 @@ async def init_context(ctx: NetworkContext) -> None:
 
         @ctx.message_event.core(ServerReply.ERR_NICKNAMEINUSE)
         async def nick_in_use(ctx: NetworkContext, _: Any) -> None:
-            def inc_suffix(m: Match) -> str:
+            def inc_suffix(m: Match[str]) -> str:
                 num = m.group(1) or 0
                 return str(int(num) + 1)
             ctx.network.nickname = re.sub(r"(\d*)$", inc_suffix, ctx.network.nickname)

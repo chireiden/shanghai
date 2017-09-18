@@ -19,8 +19,8 @@
 import asyncio
 import functools
 import enum
-from typing import (Any, Awaitable, Callable, Container, DefaultDict, Hashable, Iterable,
-                    Iterator, List, NamedTuple, Set, Tuple, TypeVar, cast)
+from typing import (Any, Awaitable, Callable, Container, DefaultDict, Iterable,
+                    Iterator, List, NamedTuple, Optional, Set, Tuple, TypeVar, cast)
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
@@ -123,7 +123,7 @@ class _PrioritizedSetList(Iterable[Tuple[int, Set[HT]]], Container[HT]):
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
 
 
-EventHandler = Callable[..., Awaitable['ReturnValue']]
+EventHandler = Callable[..., Awaitable[Optional['ReturnValue']]]
 DecoratorType = Callable[[EventHandler], EventHandler]
 
 

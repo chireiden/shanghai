@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Dict, List, Mapping, NamedTuple, Sequence, Union
+from typing import Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
 
 from .server_reply import ServerReply
 from ..logging import get_default_logger
@@ -34,8 +34,8 @@ _ESCAPE_SEQUENCES = {
 class Prefix(NamedTuple):
 
     name: str
-    ident: str = None
-    host: str = None
+    ident: Optional[str] = None
+    host: Optional[str] = None
 
     @classmethod
     def from_string(cls, prefix: str) -> 'Prefix':
@@ -76,7 +76,7 @@ class Message:
         sequences = {v: k for k, v in _ESCAPE_SEQUENCES.items()}
         for char in value:
             if char in sequences:
-                out_value += '\\' + sequences.get(char)
+                out_value += '\\' + sequences[char]
             else:
                 out_value += char
         return out_value
