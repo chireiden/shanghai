@@ -24,7 +24,6 @@ from typing import (Any, Awaitable, Callable, Container, DefaultDict, Iterable,
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
-from .network import NetworkContext
 
 
 class NetworkEvent(NamedTuple):
@@ -135,12 +134,12 @@ class EventDecorator:
         self.dispatcher = dispatcher
 
     def __call__(self, name: str, priority: int = Priority.DEFAULT) -> DecoratorType:
-        if name not in self.allowed_names:
+        if self.allowed_names and name not in self.allowed_names:
             raise ValueError(f"Unknown event name {name!r}")
 
         def deco(coroutine: EventHandler) -> EventHandler:
             self.dispatcher.register(name, coroutine, priority)
-            setattr(coroutine, 'unregistrer',
+            setattr(coroutine, 'unregister',
                     functools.partial(self.dispatcher.unregister, name, coroutine))
             return coroutine
 
@@ -232,18 +231,6 @@ class GlobalEventDispatcher(EventDispatcher):
         super().__init__(logger)
         # https://github.com/python/typeshed/issues/1590
         self.decorator.allowed_names = set(GlobalEventName.__members__.values())  # type: ignore
-
-
-class NetworkEventDispatcher(EventDispatcher):
-
-    def __init__(self, context: NetworkContext, logger: Logger = None) -> None:
-        super().__init__(logger)
-        self.context = context
-        # https://github.com/python/typeshed/issues/1590
-        self.decorator.allowed_names = set(NetworkEventName.__members__.values())  # type: ignore
-
-    async def dispatch_nwevent(self, event: NetworkEvent) -> ReturnValue:
-        return await self.dispatch(event.name, self.context, event.value)
 
 
 global_dispatcher = GlobalEventDispatcher()

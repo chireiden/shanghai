@@ -22,6 +22,7 @@ from unittest import mock
 import pytest
 
 from shanghai import event
+from shanghai import network
 from shanghai.logging import Logger
 
 
@@ -192,7 +193,7 @@ class TestEventDispatchers:
 
     def test_network_dispatch(self, loop):
         context = mock.Mock()
-        dispatcher = event.NetworkEventDispatcher(context)
+        dispatcher = network.NetworkEventDispatcher(context)
         evt = event.NetworkEvent("name", 456)
         called = False
 
@@ -267,53 +268,58 @@ class TestEventDecorator:
     @pytest.fixture
     def nw_evt_disp(self):
         context = mock.Mock()
-        return event.NetworkEventDispatcher(context)
+        return network.NetworkEventDispatcher(context)
 
     def test_calls_register(self):
         dispatcher = mock.Mock(event.EventDispatcher)
         deco = event.EventDecorator(dispatcher)
+        evt_name = "evt"
 
-        @deco('evt')
+        @deco(evt_name)
         async def on_connected(ctx, _):
             pass
 
-        dispatcher.register.assert_called_with('evt', on_connected, event.Priority.DEFAULT)
+        dispatcher.register.assert_called_with(evt_name, on_connected, event.Priority.DEFAULT)
 
         on_connected.unregister()
-        dispatcher.unregister.assert_called_with('evt', on_connected)
+        dispatcher.unregister.assert_called_with(evt_name, on_connected)
 
     def test_core_calls_register(self):
         dispatcher = mock.Mock(event.EventDispatcher)
         deco = event.EventDecorator(dispatcher)
+        evt_name = "core_evt"
 
-        @deco.core('core_evt')
+        @deco.core(evt_name)
         async def on_connected(ctx, _):
             pass
 
-        dispatcher.register.assert_called_with('core_evt', on_connected, event.Priority.CORE)
+        dispatcher.register.assert_called_with(evt_name, on_connected, event.Priority.CORE)
 
         on_connected.unregister()
-        dispatcher.unregister.assert_called_with('core_evt', on_connected)
+        dispatcher.unregister.assert_called_with(evt_name, on_connected)
 
     def test_network_event(self, nw_evt_disp):
         deco = nw_evt_disp.decorator
+        evt_name = event.NetworkEventName.CONNECTED
 
-        @deco(event.NetworkEventName.CONNECTED)
+        @deco(evt_name)
         async def on_connected(ctx, _):
             pass
 
-        prio_set_list = nw_evt_disp.event_map[event.NetworkEventName.CONNECTED]
+        prio_set_list = nw_evt_disp.event_map[evt_name]
         assert on_connected in prio_set_list
 
     def test_network_event_exists(self, nw_evt_disp):
         deco = nw_evt_disp.decorator
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             @deco(123)
             async def x():
                 pass
+        excinfo.match(f"Unknown event name 123")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError) as excinfo:
             @deco('name')
             async def xx():
                 pass
+        excinfo.match(f"Unknown event name 'name'")

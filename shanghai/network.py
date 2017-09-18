@@ -21,14 +21,13 @@ import io
 import itertools
 import re
 import time
-from typing import Any, Iterator, List, Optional, cast
+from typing import Any, Iterator, List, cast
 from typing.re import Match
 
 from .connection import Connection
 from .config import NetworkConfiguration, Server
 from .event import (NetworkEvent, GlobalEventName, NetworkEventName,
-                    global_dispatcher, global_event, Priority,
-                    NetworkEventDispatcher)
+                    global_dispatcher, global_event, Priority, EventDispatcher, ReturnValue)
 from .irc import Message, Options, ServerReply
 from .logging import get_logger, Logger
 from .util import ShadowAttributesMixin
@@ -173,6 +172,18 @@ class Network:
     def request_close(self, quitmsg: str = None) -> None:
         event = NetworkEvent(NetworkEventName.CLOSE_REQUEST, quitmsg)
         self.event_queue.put_nowait(event)
+
+
+class NetworkEventDispatcher(EventDispatcher):
+
+    def __init__(self, context: NetworkContext, logger: Logger = None) -> None:
+        super().__init__(logger)
+        self.context = context
+        # https://github.com/python/typeshed/issues/1590
+        self.decorator.allowed_names = set(NetworkEventName.__members__.values())  # type: ignore
+
+    async def dispatch_nwevent(self, event: NetworkEvent) -> ReturnValue:
+        return await self.dispatch(event.name, self.context, event.value)
 
 
 # Core event handlers #############################################################################

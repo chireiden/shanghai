@@ -39,12 +39,12 @@ def load():
 class TestServer:
 
     def test_defaults(self):
-        server = Server("host")
+        server = Server.with_optional_port("host")
         assert server.host == "host"
         assert server.port == 6667
         assert server.ssl is False
 
-        server = Server("host", ssl=True)
+        server = Server.with_optional_port("host", ssl=True)
         assert server.host == "host"
         assert server.port == 6697
         assert server.ssl is True

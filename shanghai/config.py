@@ -171,7 +171,7 @@ class NetworkConfiguration(FallbackConfiguration):
             if isinstance(server_conf, str):
                 server = Server.from_string(server_conf)
             else:
-                server = Server(**server_conf)
+                server = Server.with_optional_port(**server_conf)
             servers.append(server)
 
         else:

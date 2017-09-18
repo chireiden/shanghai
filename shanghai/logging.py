@@ -48,7 +48,7 @@ logging.addLevelName(LogLevels.DDEBUG, "DDEBUG")
 
 def _print_like(func: Callable) -> Callable[..., None]:
     @functools.wraps(func)
-    def _wrap(self: Logger, *args: Any, **kwargs: Any) -> None:
+    def _wrap(self: 'Logger', *args: Any, **kwargs: Any) -> None:
         f = io.StringIO()
         print(*args, file=f)
         func(self, f.getvalue().strip(), **kwargs)
