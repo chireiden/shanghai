@@ -179,8 +179,7 @@ class NetworkEventDispatcher(EventDispatcher):
     def __init__(self, context: NetworkContext, logger: Logger = None) -> None:
         super().__init__(logger)
         self.context = context
-        # https://github.com/python/typeshed/issues/1590
-        self.decorator.allowed_names = set(NetworkEventName.__members__.values())  # type: ignore
+        self.decorator.allowed_names = set(NetworkEventName.__members__.values())
 
     async def dispatch_nwevent(self, event: NetworkEvent) -> ReturnValue:
         return await self.dispatch(event.name, self.context, event.value)

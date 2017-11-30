@@ -84,7 +84,7 @@ async def stdin_reader(loop: asyncio.AbstractEventLoop,
     else:
         reader = asyncio.StreamReader()
         make_protocol = partial(asyncio.StreamReaderProtocol, reader)
-        await loop.connect_read_pipe(make_protocol, sys.stdin)  # type: ignore
+        await loop.connect_read_pipe(make_protocol, sys.stdin)
 
         while True:
             line_bytes = await reader.readline()

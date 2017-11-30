@@ -229,8 +229,7 @@ class GlobalEventDispatcher(EventDispatcher):
 
     def __init__(self, logger: Logger = None) -> None:
         super().__init__(logger)
-        # https://github.com/python/typeshed/issues/1590
-        self.decorator.allowed_names = set(GlobalEventName.__members__.values())  # type: ignore
+        self.decorator.allowed_names = set(GlobalEventName.__members__.values())
 
 
 global_dispatcher = GlobalEventDispatcher()

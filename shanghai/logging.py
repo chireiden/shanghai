@@ -91,10 +91,10 @@ class TerminalColor(str, Enum):
 
     @classmethod
     def for_level(cls, level: int) -> str:
-        # mypy has issues here. https://github.com/python/mypy/issues/3622
         for log_level in sorted(LogLevels, reverse=True):  # type: ignore
-            if level >= log_level.value:  # type: ignore
-                return getattr(cls, log_level.name, "")  # type: ignore
+            if level >= log_level.value:
+                level_name: str = getattr(cls, log_level.name, "")
+                return level_name
         return ""
 
 
@@ -201,7 +201,7 @@ def get_logger(context: str, name: str,
     name_attributes = dict(context=context, name=name, date=now)
 
     level = config.get('logging.level', 'INFO')
-    logger.setLevel(LogLevels[level])  # type: ignore
+    logger.setLevel(LogLevels[level])
 
     if not config.get('logging.disable', False):
         file_formatter = Formatter(context, name, tz=timezone)
