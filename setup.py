@@ -39,7 +39,7 @@ setup(
     version='0.1.0',
     description='Shanghai IRC Bot',
     long_description='Shanghai IRC Bot',
-    url='',
+    url='https://github.com/chireiden/shanghai',
     license=lic,
     author='Lars Peter Søndergaard',
     author_email='lps@chireiden.net',

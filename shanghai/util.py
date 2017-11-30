@@ -17,7 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import functools
-from typing import Union, Callable
+from typing import Any, Callable, Dict, Union, cast
 
 from fullqualname import fullqualname
 
@@ -36,12 +36,13 @@ class ShadowAttributesMixin:
     use `remove_attribute`.
     """
 
-    def __init__(self, *args, **kwargs):
-        self._added_attributes = dict()
+    _added_attributes: Dict[str, Any]
 
-        super().__init__(*args, **kwargs)
+    def __init__(self) -> None:
+        super().__init__()
+        self._added_attributes = {}
 
-    def add_attribute(self, name: str, value=None):
+    def add_attribute(self, name: str, value: Any = None) -> None:
         """Allows to add attributes to an object.
 
         Use this instead of directly setting attributes (or with `setattr`).
@@ -51,7 +52,7 @@ class ShadowAttributesMixin:
             raise KeyError(f"Attribute {name!r} is already defined")
         self._added_attributes[name] = value
 
-    def set_attribute(self, name: str, value=None):
+    def set_attribute(self, name: str, value: Any = None) -> None:
         """Allows to modify added attributes to an object."""
         if name in self.__dict__:  # cannot use hasattr because that would call __getattr__
             raise KeyError(name)
@@ -59,13 +60,13 @@ class ShadowAttributesMixin:
             raise KeyError(f"Attribute {name!r} is not defined")
         self._added_attributes[name] = value
 
-    def has_attribute(self, name: str):
+    def has_attribute(self, name: str) -> bool:
         """Check if an attribute exists already."""
         # TODO test how hasattr performs with our __getattr__
         return name in self.__dict__ or name in self._added_attributes
 
     def add_method(self, name_or_function: Union[str, Callable], function: Callable = None,
-                   *, _static=False):
+                   _static: bool = False) -> Callable:
         """Allows to add methods to an object.
 
         Added functions will be called with an implicit `self` argment,
@@ -84,27 +85,29 @@ class ShadowAttributesMixin:
             name = name_or_function
 
         if not _static:
-            attr = functools.partial(function, self)
+            # mypy error fixed by https://github.com/python/mypy/pull/3132
+            attr = cast(Callable, functools.partial(function, self))
         else:
             attr = function
         self.add_attribute(name, attr)
 
         return function
 
-    def add_staticmethod(self, name_or_function: Union[str, Callable], function: Callable = None):
+    def add_staticmethod(self, name_or_function: Union[str, Callable], function: Callable = None) \
+            -> Callable:
         """Allows to add staticmethods to an object.
 
         Also functions as a decorator and infers the attribute name from the function name.
         """
         return self.add_method(name_or_function, function, _static=True)
 
-    def remove_attribute(self, name: str):
+    def remove_attribute(self, name: str) -> None:
         """Allows for plugins to remove their added attributes to the network object."""
         if name not in self._added_attributes:
             raise KeyError(f"Attribute {name!r} is not defined")
         del self._added_attributes[name]
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         if name in self._added_attributes:
             return self._added_attributes[name]
         else:
@@ -112,6 +115,6 @@ class ShadowAttributesMixin:
         #     super().__getattr__(name)
 
 
-def repr_func(func: callable) -> str:
+def repr_func(func: Callable) -> str:
     """Represent a function with its full qualname instead of just its name and an address."""
     return f"<{type(func).__name__} {fullqualname(func)}>"

@@ -17,7 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 from collections import abc as c_abc
-from types import SimpleNamespace
+from typing import Any, Iterable, List, NamedTuple, Mapping, Optional, cast
 
 from ruamel import yaml as ryaml
 
@@ -26,23 +26,28 @@ class ConfigurationError(ValueError):
     pass
 
 
-class Server(SimpleNamespace):
-    _default_ports = {True: 6697, False: 6667}
+class Server(NamedTuple):
 
-    def __init__(self, host, port=None, ssl=False):
-        if port is None:
-            port = self._default_ports[ssl]
-        super().__init__(host=host, port=port, ssl=ssl)
+    host: str
+    port: int
+    ssl: bool = False
 
     @classmethod
-    def from_string(cls, string):
-        host, _, port = string.partition(":")
-        _, ssl, port = port.rpartition("+")
-        port = int(port) if port else None
-        ssl = bool(ssl)
+    def with_optional_port(cls, host: str, port: Optional[int] = None, ssl: bool = False) \
+            -> 'Server':
+        if port is None:
+            port = 6697 if ssl else 6667
         return cls(host, port, ssl)
 
-    def __str__(self):
+    @classmethod
+    def from_string(cls, string: str) -> 'Server':
+        host, _, port_str = string.partition(":")
+        _, ssl_str, port_str = port_str.rpartition("+")
+        port = int(port_str) if port_str else None
+        ssl = bool(ssl_str)
+        return cls.with_optional_port(host, port, ssl)
+
+    def __str__(self) -> str:
         return f"{self.host}:{'+' if self.ssl else ''}{self.port}"
 
 
@@ -56,14 +61,14 @@ class Configuration:
     equivalent to `d.get('logging', {}).get('enabled')`.
     """
 
-    def __init__(self, mapping=None):
+    def __init__(self, mapping: Mapping = None) -> None:
         if mapping is None:
             mapping = {}
         if not isinstance(mapping, c_abc.Mapping):
             raise ValueError("Must be a mapping")
         self.mapping = mapping
 
-    def get(self, item, default=None):
+    def get(self, item: str, default: Any = None) -> Any:
         """Get a value from the config mapping, with a default value.
         """
         try:
@@ -74,7 +79,7 @@ class Configuration:
             else:
                 raise
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         node = self.mapping
         leafs = key.split(".")
 
@@ -91,7 +96,7 @@ class Configuration:
 
         raise KeyError(f"Cannot find '{key}'")
 
-    def __contains__(self, key):
+    def __contains__(self, key: str) -> bool:
         obj = object()
         return self.get(key, obj) is not obj
 
@@ -100,14 +105,14 @@ class FallbackConfiguration(Configuration):
 
     """Like Configuration, but can fallback to other Configurations if keys are not found."""
 
-    def __init__(self, mapping, *fallback_configs: Configuration):
+    def __init__(self, mapping: Mapping, *fallback_configs: Configuration) -> None:
         super().__init__(mapping)
         # for fb_c in fallback_configs:
         #     if not isinstance(fb_c, Configuration):
         #         raise ValueError(f"{fb_c!r} is not an instance of {Configuration}")
         self.fallback_configs = fallback_configs
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str) -> Any:
         try:
             return super().__getitem__(key)
         except KeyError as e:
@@ -122,23 +127,19 @@ class FallbackConfiguration(Configuration):
 
         raise KeyError(f"Cannot find '{key}'")
 
-    def __contains__(self, key):
-        # if super().__contains__(key):
-        #     return True
-        # else:
-        #     return any(key in config for config in self.fallback_configs)
-        return any(config.__contains__(key) for config in (super(), *self.fallback_configs))
+    def __contains__(self, key: str) -> bool:
+        config_chain: Iterable[Configuration] = (cast(Configuration, super()),
+                                                 *self.fallback_configs)
+        return any(config.__contains__(key) for config in config_chain)
 
-    def __repr__(self):
-        mapping = self.mapping
-        if len(mapping) > 5:
-            mapping = "{...}"
-        return f"{type(self).__name__}({mapping}, *fallback_configs={self.fallback_configs!r})"
+    def __repr__(self) -> str:
+        mapping_str = repr(self.mapping) if len(self.mapping) <= 4 else "{...}"
+        return f"{type(self).__name__}({mapping_str}, *fallback_configs={self.fallback_configs!r})"
 
 
 class NetworkConfiguration(FallbackConfiguration):
 
-    def __init__(self, name, mapping, *fallback_configs: Configuration):
+    def __init__(self, name: str, mapping: Mapping, *fallback_configs: Configuration) -> None:
         super().__init__(mapping, *fallback_configs)
         self.name = name
 
@@ -148,7 +149,7 @@ class NetworkConfiguration(FallbackConfiguration):
         self.servers = self._parse_servers(mapping)
 
     @staticmethod
-    def _fix_channels(mapping):
+    def _fix_channels(mapping: Mapping) -> None:
         # TODO move to channels core plugin
         for channel, channel_conf in mapping.get('channels', {}).items():
             if channel_conf is None:
@@ -159,7 +160,7 @@ class NetworkConfiguration(FallbackConfiguration):
                 del mapping['channels'][channel]
                 mapping['channels'][f'#{channel}'] = channel_conf
 
-    def _parse_servers(self, mapping):
+    def _parse_servers(self, mapping: Mapping) -> List[Server]:
         servers = []
         servers_conf = mapping.get('servers')
         if not servers_conf:
@@ -170,39 +171,37 @@ class NetworkConfiguration(FallbackConfiguration):
             if isinstance(server_conf, str):
                 server = Server.from_string(server_conf)
             else:
-                server = Server(**server_conf)
+                server = Server.with_optional_port(**server_conf)
             servers.append(server)
 
         else:
             return servers
 
-    def _require_keys(self, required_keys):
+    def _require_keys(self, required_keys: Iterable[str]) -> None:
         missing_keys = sorted(key for key in required_keys if key not in self)
         if missing_keys:
             raise ConfigurationError(f"Network {self.name!r} is missing the following options:"
                                      f" {', '.join(missing_keys)}")
 
-    def __repr__(self):
-        mapping = self.mapping
-        if len(mapping) > 5:
-            mapping = "{...}"
-        return (f"{type(self).__name__}({self.name!r}, {mapping},"
+    def __repr__(self) -> str:
+        mapping_str = repr(self.mapping) if len(self.mapping) <= 4 else "{...}"
+        return (f"{type(self).__name__}({self.name!r}, {mapping_str},"
                 f" *fallback_configs={self.fallback_configs!r})")
 
 
 class ShanghaiConfiguration(Configuration):
 
-    def __init__(self, mapping):
+    def __init__(self, mapping: Mapping) -> None:
         super().__init__(mapping)
         self.networks = list(self._parse_networks(mapping))
 
     @classmethod
-    def from_filename(cls, filename):
+    def from_filename(cls, filename: str) -> 'ShanghaiConfiguration':
         with open(filename, 'r', encoding='utf-8') as f:
             yaml_config = ryaml.safe_load(f)
         return cls(yaml_config)
 
-    def _parse_networks(self, root):
+    def _parse_networks(self, root: Mapping) -> List[NetworkConfiguration]:
         networks = root.get('networks', None)
         if networks is None:
             raise ConfigurationError("No networks found")

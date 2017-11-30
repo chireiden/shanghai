@@ -19,15 +19,20 @@
 import asyncio
 
 from .config import Server
-from .event import NetworkEvent
+from .event import NetworkEvent, NetworkEventName
 from .logging import Logger, get_default_logger
 
 
 class Connection:
 
-    def __init__(self, server: Server, queue,
-                 loop: asyncio.AbstractEventLoop = None,
-                 logger: Logger = None):
+    writer: asyncio.StreamWriter
+
+    def __init__(self,
+                 server: Server,
+                 queue: asyncio.Queue,
+                 loop: asyncio.AbstractEventLoop,
+                 logger: Logger = None,
+                 ) -> None:
         self.server = server
         self.queue = queue
         self.loop = loop
@@ -35,18 +40,16 @@ class Connection:
             logger = get_default_logger()
         self.logger = logger
 
-        self.writer = None  # type: asyncio.StreamWriter
-
-    def writeline(self, line: bytes):
+    def writeline(self, line: bytes) -> None:
         self.logger.info("<", line)
         self.writer.write(line)
         self.writer.write(b'\r\n')
 
-    def close(self):
+    def close(self) -> None:
         self.logger.debug("closing connection")
         self.writer.close()
 
-    async def run(self):
+    async def run(self) -> None:
         self.logger.info(f"connecting to {self.server}...")
         reader, writer = await asyncio.open_connection(
             self.server.host, self.server.port, ssl=self.server.ssl, loop=self.loop
@@ -61,7 +64,8 @@ class Connection:
                 line = line.strip()
                 self.logger.debug(">", line)
                 if line:
-                    await self.queue.put(NetworkEvent('raw_line', line))
+                    event = NetworkEvent(NetworkEventName.RAW_LINE, line)
+                    await self.queue.put(event)
         except asyncio.CancelledError:
             self.logger.info("Connection.run was cancelled")
         except ConnectionResetError as e:

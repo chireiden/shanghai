@@ -1,6 +1,7 @@
 -r requirements.txt
 coverage
 flake8
+mypy
 pip-tools
 pylint
 pytest

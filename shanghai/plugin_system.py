@@ -17,11 +17,12 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import ast
-from collections import OrderedDict
 import importlib.util
 import pathlib
 import os
 import sys
+from typing import Dict, Iterable, NamedTuple, Union
+from types import ModuleType
 import keyword
 
 from .logging import get_logger, get_default_logger
@@ -31,9 +32,70 @@ class CyclicDependency(Exception):
     pass
 
 
+class PluginInfo(NamedTuple):
+
+    """Storage type holding infor about a plugin."""
+
+    name: str
+    version: str
+    description: str
+    depends: Iterable[str] = ()
+    conflicts: Iterable[str] = ()
+
+    @classmethod
+    def read_from_file(cls, path: pathlib.Path, identifier: str) -> 'PluginInfo':
+        with path.open('r', encoding='utf-8') as f:
+            tree = ast.parse(f.read(), str(path))
+
+        info_dict: Dict[str, Union[str, Iterable]] = {}
+        required_ids = set(cls._field_defaults.keys())
+
+        for statement in tree.body:
+            if not isinstance(statement, ast.Assign):
+                continue
+            if len(statement.targets) != 1:
+                continue
+            target = statement.targets[0]
+            if not isinstance(target, ast.Name):
+                continue
+            if not target.id.startswith('__plugin_') or not target.id.endswith('__'):
+                continue
+            _id: str = target.id.strip('_')[7:]
+
+            if _id not in cls._fields:
+                continue
+            elif _id in ('depends', 'conflicts'):
+                listing = statement.value
+                if not isinstance(listing, ast.Tuple):
+                    raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple.")
+                list_value = []
+                for element in listing.elts:
+                    if not isinstance(element, ast.Str):
+                        raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple"
+                                        " and must only contain strings.")
+                    list_value.append(element.s)
+                info_dict[_id] = tuple(list_value)
+            else:
+                if not isinstance(statement.value, ast.Str):
+                    raise TypeError(f"Plugin {identifier!r}: {target.id} can only be a string")
+                str_value = statement.value.s
+                info_dict[_id] = str_value
+
+            if _id in required_ids:
+                required_ids.remove(_id)
+
+        if required_ids:
+            # TODO: Use better exception.
+            missing_str = ', '.join(f'__plugin_{i}__' for i in required_ids)
+            raise RuntimeError(f"Missing {missing_str} in {str(path)!r}")
+
+        return cls(**info_dict)  # type: ignore
+
+
 class Plugin:
 
-    def __init__(self, module, identifier, namespace, info):
+    def __init__(self, module: ModuleType, identifier: str, namespace: str, info: PluginInfo) \
+            -> None:
         self.module = module
         self.identifier = identifier
         self.namespace = namespace
@@ -42,9 +104,9 @@ class Plugin:
         self.logger = get_logger(namespace, self.identifier)
         self.module_name = module.__name__
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (f"<Plugin {self.module_name}:"
-                f" {self.info['name']} {self.info['version']} - {self.info['description']}>")
+                f" {self.info.name} {self.info.version} - {self.info.description}>")
 
 
 class PluginSystem:
@@ -67,7 +129,9 @@ class PluginSystem:
         _shanghai_base_path,
     ]
 
-    def __init__(self, namespace, is_core=False):
+    plugin_registry: Dict[str, Plugin]
+
+    def __init__(self, namespace: str, is_core: bool = False) -> None:
         # TODO add search base paths parameter
         if not namespace.isidentifier():
             raise ValueError("Invalid plugin namespace."
@@ -93,13 +157,13 @@ class PluginSystem:
         self.plugin_registry = {}
         self.logger = get_default_logger()
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> ModuleType:
         if item in self.plugin_registry:
             return self.plugin_registry[item].module
         raise AttributeError(item)
 
-    def load_all_plugins(self):
-        plugins_to_load = {}
+    def load_all_plugins(self) -> None:
+        plugins_to_load: Dict[str, pathlib.Path] = {}
 
         for search_path in self.plugin_search_paths:
             for module_path in search_path.glob("*.py"):
@@ -119,7 +183,10 @@ class PluginSystem:
                 self.logger.exception(f"Unable to load plugin {identifier!r}: {e!s}")
             self._register_plugin(plugin)
 
-    def load_plugin(self, identifier, *, dependency_path=(), is_core=False):
+    def load_plugin(self, identifier: str, *,
+                    dependency_path: Iterable[str] = (),
+                    is_core: bool = False,
+                    ) -> Plugin:
         if not identifier.isidentifier():
             raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
         if keyword.iskeyword(identifier):
@@ -148,13 +215,13 @@ class PluginSystem:
         self._register_plugin(plugin)
         return plugin
 
-    def _register_plugin(self, plugin):
+    def _register_plugin(self, plugin: Plugin) -> None:
         self.plugin_registry[plugin.identifier] = plugin
         sys.modules[plugin.module_name] = plugin.module
         self.logger.debug(f"Setting sys.modules[{plugin.module_name!r}] to {plugin.module}")
 
     @classmethod
-    def _find_module_path(cls, search_path: pathlib.Path, identifier) -> pathlib.Path:
+    def _find_module_path(cls, search_path: pathlib.Path, identifier: str) -> pathlib.Path:
         path = pathlib.Path(search_path, identifier)
         module_path = path.with_suffix(".py")
         if not module_path.exists():
@@ -163,16 +230,19 @@ class PluginSystem:
             return module_path
         raise OSError(f"Error trying to load {str(path)!r}")
 
-    def _load_plugin_as_module(self, path: pathlib.Path, identifier, *, dependency_path=()):
-        info = self._get_plugin_info(path, identifier)
+    def _load_plugin_as_module(self, path: pathlib.Path, identifier: str, *,
+                               dependency_path: Iterable[str] = (),
+                               ) -> Plugin:
+        info = PluginInfo.read_from_file(path, identifier)
 
-        # TODO info['conflicts']
-        for dependency in info['depends']:
+        # TODO info.conflicts
+        for dependency in info.depends:
+            new_dependency_path = (*dependency_path, identifier)
             if dependency in dependency_path:
                 raise CyclicDependency(
-                    f"Cyclic dependency detected: {' -> '.join([identifier] + dependency_path)}"
+                    f"Cyclic dependency detected: {' -> '.join(new_dependency_path)}"
                 )
-            self.load_plugin(dependency, dependency_path=dependency_path + (identifier,))
+            self.load_plugin(dependency, dependency_path=new_dependency_path)
 
         if dependency_path:
             self.logger.info(f"Loading plugin {identifier!r} as dependency of {dependency_path!r}")
@@ -183,66 +253,11 @@ class PluginSystem:
         spec = importlib.util.spec_from_file_location(module_name, str(path))
 
         module = importlib.util.module_from_spec(spec)
+        if spec.loader is None:
+            raise ImportError("No loader for module available")
         spec.loader.exec_module(module)
         self.logger.info("Found plugin in", module.__file__)
 
         plugin = Plugin(module, identifier, self.namespace, info)
         self.logger.info("Loaded plugin", plugin)
         return plugin
-
-    @staticmethod
-    def _get_plugin_info(path: pathlib.Path, identifier):
-        with path.open('r', encoding='utf-8') as f:
-            tree = ast.parse(f.read(), str(path))
-
-        info = OrderedDict([
-            ('name', None),
-            ('version', None),
-            ('description', None),
-            ('depends', []),
-            ('conflicts', []),
-        ])
-        required_ids = {'name', 'version', 'description'}
-        ignore_ids = {}
-
-        for statement in tree.body:
-            if not isinstance(statement, ast.Assign):
-                continue
-            if len(statement.targets) != 1:
-                continue
-            target = statement.targets[0]
-            if not isinstance(target, ast.Name):
-                continue
-            if not target.id.startswith('__plugin_') or not target.id.endswith('__'):
-                continue
-            _id = target.id.strip('_')[7:]
-
-            if _id in ignore_ids:
-                continue
-            elif _id not in info:
-                continue
-            elif _id in ('depends', 'conflicts'):
-                listing = statement.value
-                if not isinstance(listing, ast.Tuple):
-                    raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple.")
-                value = []
-                for element in listing.elts:
-                    if not isinstance(element, ast.Str):
-                        raise TypeError(f"Plugin {identifier!r}: {target.id} must be a tuple"
-                                        " and must only contain strings.")
-                    value.append(element.s)
-            else:
-                if not isinstance(statement.value, ast.Str):
-                    raise TypeError(f"Plugin {identifier!r}: {target.id} can only be a string")
-                value = statement.value.s
-
-            if _id in required_ids:
-                required_ids.remove(_id)
-            info[_id] = value
-
-        if required_ids:
-            # TODO: Use better exception.
-            missing_str = ', '.join(f'__plugin_{i}__' for i in required_ids)
-            raise RuntimeError(f"Missing {missing_str} in {str(path)!r}")
-
-        return info

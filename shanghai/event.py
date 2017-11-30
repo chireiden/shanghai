@@ -17,15 +17,18 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 import asyncio
-from collections import namedtuple, defaultdict
 import functools
 import enum
+from typing import (Any, Awaitable, Callable, Container, DefaultDict, Iterable,
+                    Iterator, List, NamedTuple, Optional, Set, Tuple, TypeVar, cast)
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
 
-NetworkEvent = namedtuple("NetworkEvent", "name value")
-NetworkEvent.__new__.__defaults__ = (None,)  # Make last argument optional
+
+class NetworkEvent(NamedTuple):
+    name: str
+    value: Any = None
 
 
 class NetworkEventName(str, enum.Enum):
@@ -54,25 +57,33 @@ class Priority(int, enum.Enum):
     DEFAULT = -10
 
     @classmethod
-    def lookup(cls, priority: int):
+    def lookup(cls, priority: int) -> int:
         for k, v in cls.__members__.items():
             if priority == v:
-                return v
+                return cast(Priority, v)
         else:
             return priority
 
 
-class _PrioritizedSetList:
+HT = TypeVar('HT')
+# Ideally, the following would be used,
+# by mypy doesn't consider the callable to be hashable for some reason,
+# HT = TypeVar('HT', bound=Hashable)
+
+
+class _PrioritizedSetList(Iterable[Tuple[int, Set[HT]]], Container[HT]):
 
     """Manages a list of sets, keyed by a priority level.
 
     Is always sorted by the level (descending).
     """
 
-    def __init__(self):
+    list: List[Tuple[int, Set[HT]]]
+
+    def __init__(self) -> None:
         self.list = list()
 
-    def add(self, priority: int, obj):
+    def add(self, priority: int, obj: HT) -> None:
         if obj in self:
             raise ValueError(f"Object {obj!r} has already been added")
 
@@ -88,7 +99,7 @@ class _PrioritizedSetList:
 
         self.list.insert(i, (priority, {obj}))
 
-    def remove(self, obj):
+    def remove(self, obj: HT) -> None:
         for i, (prio, set_) in enumerate(self.list):
             if obj in set_:
                 set_.remove(obj)
@@ -98,39 +109,43 @@ class _PrioritizedSetList:
         else:
             raise ValueError(f"Object {obj!r} can not be found")
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[int, Set[HT]]]:
         return iter(self.list)
 
-    def __contains__(self, obj):
+    def __contains__(self, obj: Any) -> bool:
         return any(obj in set_ for _, set_ in self)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self.list)
 
     # def sort(self):
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
 
 
+EventHandler = Callable[..., Awaitable[Optional['ReturnValue']]]
+DecoratorType = Callable[[EventHandler], EventHandler]
+
+
 class EventDecorator:
 
-    allowed_names = None
+    allowed_names: Container[str] = ()
 
-    def __init__(self, dispatcher):
+    def __init__(self, dispatcher: 'EventDispatcher') -> None:
         self.dispatcher = dispatcher
 
-    def __call__(self, name, priority=Priority.DEFAULT):
-        if self.allowed_names:
-            if name not in self.allowed_names:
-                raise ValueError(f"Unknown event name {name!r}")
+    def __call__(self, name: str, priority: int = Priority.DEFAULT) -> DecoratorType:
+        if self.allowed_names and name not in self.allowed_names:
+            raise ValueError(f"Unknown event name {name!r}")
 
-        def deco(coroutine):
+        def deco(coroutine: EventHandler) -> EventHandler:
             self.dispatcher.register(name, coroutine, priority)
-            coroutine.unregister = functools.partial(self.dispatcher.unregister, name, coroutine)
+            setattr(coroutine, 'unregister',
+                    functools.partial(self.dispatcher.unregister, name, coroutine))
             return coroutine
 
         return deco
 
-    def core(self, name):
+    def core(self, name: str) -> DecoratorType:
         return self(name, Priority.CORE)
 
 
@@ -138,17 +153,22 @@ class EventDispatcher:
 
     """Allows to register handlers and to dispatch events to said handlers, by priority."""
 
-    def __init__(self, logger: Logger = None):
-        self.event_map = defaultdict(_PrioritizedSetList)
+    event_map: DefaultDict[str, _PrioritizedSetList[EventHandler]]
+    logger: Logger
+    decorator: EventDecorator
+
+    def __init__(self, logger: Logger = None) -> None:
+        self.event_map = DefaultDict(_PrioritizedSetList)
         self.logger = logger or get_default_logger()
 
         self.decorator = EventDecorator(self)
 
-    def unregister(self, name: str, coroutine):
+    def unregister(self, name: str, coroutine: EventHandler) -> None:
         self.logger.ddebug(f"Unregistering event handler for event {name!r}: {coroutine}")
         self.event_map[name].remove(coroutine)
 
-    def register(self, name: str, coroutine, priority: int = Priority.DEFAULT):
+    def register(self, name: str, coroutine: EventHandler, priority: int = Priority.DEFAULT) \
+            -> None:
         priority = Priority.lookup(priority)  # for pretty __repr__
         self.logger.ddebug(f"Registering event handler for event {name!r} ({priority!r}):"
                            f" {coroutine}")
@@ -157,11 +177,11 @@ class EventDispatcher:
 
         self.event_map[name].add(priority, coroutine)
 
-    async def dispatch(self, name: str, *args):
+    async def dispatch(self, name: str, *args: Any) -> ReturnValue:
         self.logger.ddebug(f"Dispatching event {name!r} with arguments {args}")
         if name not in self.event_map:
             self.logger.ddebug(f"No event handlers for event {name!r}")
-            return
+            return ReturnValue.NONE
 
         for priority, handlers in self.event_map[name]:
             priority = Priority.lookup(priority)  # for pretty __repr__
@@ -202,25 +222,15 @@ class EventDispatcher:
 
             if eaten:
                 return ReturnValue.EAT
+        return ReturnValue.NONE
 
 
 class GlobalEventDispatcher(EventDispatcher):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, logger: Logger = None) -> None:
+        super().__init__(logger)
         self.decorator.allowed_names = set(GlobalEventName.__members__.values())
 
 
-class NetworkEventDispatcher(EventDispatcher):
-
-    def __init__(self, context, *args, **kwargs):
-        super().__init__()
-        self.context = context
-        self.decorator.allowed_names = set(NetworkEventName.__members__.values())
-
-    async def dispatch(self, event: NetworkEvent):
-        return await super().dispatch(event.name, self.context, event.value)
-
-
 global_dispatcher = GlobalEventDispatcher()
-global_event = global_dispatcher.decorator
+global_event: EventDecorator = global_dispatcher.decorator

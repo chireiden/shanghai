@@ -4,26 +4,33 @@
 #
 #    pip-compile --output-file dev-requirements.txt dev-requirements.in
 #
-astroid==1.4.9            # via pylint
+astroid==1.5.3            # via pylint
+attrs==17.3.0             # via pytest
 click==6.7                # via pip-tools
 colorama==0.3.7
-coverage==4.3.4
+coverage==4.4.2
 first==2.0.1              # via pip-tools
-flake8==3.3.0
+flake8==3.5.0
 fullqualname==0.1.0
-isort==4.2.5              # via pylint
-lazy-object-proxy==1.2.2  # via astroid
+isort==4.2.15             # via pylint
+lazy-object-proxy==1.3.1  # via astroid
 mccabe==0.6.1             # via flake8, pylint
-pip-tools==1.8.0
-pluggy==0.4.0             # via tox
-py==1.4.32                # via pytest, tox
+mypy==0.550
+pip-tools==1.10.2
+pluggy==0.6.0             # via pytest, tox
+psutil==5.4.1             # via mypy
+py==1.5.2                 # via pytest, tox
 pycodestyle==2.3.1        # via flake8
-pyflakes==1.5.0           # via flake8
-pylint==1.6.5
-pytest==3.0.6
+pyflakes==1.6.0           # via flake8
+pylint==1.7.4
+pytest==3.3.0
 pytz==2016.10
 ruamel.yaml==0.13.13
-six==1.10.0               # via astroid, pip-tools, pylint
-tox==2.6.0
+six==1.11.0               # via astroid, pip-tools, pylint, pytest, tox
+tox==2.9.1
+typed-ast==1.1.0          # via mypy
 virtualenv==15.1.0        # via tox
-wrapt==1.10.8             # via astroid
+wrapt==1.10.11            # via astroid
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools                # via pip-tools, pytest

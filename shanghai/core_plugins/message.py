@@ -29,7 +29,7 @@ __plugin_description__ = "Parses 'raw_line' network events and emits message eve
 
 class MessageEventDispatcher(EventDispatcher):
 
-    def __init__(self, context, *args, **kwargs):
+    def __init__(self, context, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.context = context
 
