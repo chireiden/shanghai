@@ -112,7 +112,7 @@ class Network:
 
             try:
                 await self._connection_task
-            except:
+            except Exception:
                 self.logger.exception("Connection Task errored")
 
             # Wait until worker task emptied the queue (and terminates)

@@ -156,7 +156,7 @@ def main() -> None:
         if task.done():
             try:
                 task.result()  # cause exceptions to be raised
-            except:
+            except Exception:
                 default_logger.exception(f"Network task {task!r} errored")
 
     if not stdin_reader_task.done():
