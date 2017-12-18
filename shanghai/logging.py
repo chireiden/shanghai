@@ -91,6 +91,9 @@ class TerminalColor(str, Enum):
 
     @classmethod
     def for_level(cls, level: int) -> str:
+        # mypy has issues here.
+        # https://github.com/python/mypy/issues/3622
+        # -> https://github.com/python/typeshed/issues/1595
         for log_level in sorted(LogLevels, reverse=True):  # type: ignore
             if level >= log_level.value:
                 level_name: str = getattr(cls, log_level.name, "")
