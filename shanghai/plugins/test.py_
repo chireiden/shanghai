@@ -1,0 +1,91 @@
+# Copyright © 2016  Lars Peter Søndergaard <lps@chireiden.net>
+# Copyright © 2016  FichteFoll <fichtefoll2@googlemail.com>
+#
+# This file is part of Shanghai, an asynchronous multi-server IRC bot.
+#
+# Shanghai is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Shanghai is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
+
+__plugin_name__ = 'Test'
+__plugin_version__ = 'β.γ.μ'
+__plugin_description__ = 'bla blub'
+
+
+from shanghai.plugin_base import Plugin, MessagePlugin, ChannelPlugin
+from shanghai.event import event, ReturnValue
+
+
+def _unhighlight(nick):
+    return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
+
+
+class TestPlugin(Plugin, MessagePlugin, ChannelPlugin):
+
+    @event
+    def on_channel_message(self, channel, message: ChannelMessage):
+        channel.logger.debug(f'Got a channel message {message}')
+
+        if message.words[0] == '!nicks':
+            nick_list = [_unhighlight(member.prefix.name)
+                         for member in channel.members]
+            channel.say(' '.join(nick_list))
+
+        if message.words[0] == '!names':
+            nick_list = []
+            for member in channel.members:
+                prefixes = self.network.options.modes_to_prefixes(member.modes)
+                nick_list.append(f"{prefixes}{_unhighlight(member.prefix.name)}")
+            channel.say(' '.join(nick_list))
+
+        elif message.words[0] == '!channels':
+            chan_list = [f"{chan.name} ({len(chan.members)})"
+                         for chan in self.network.channels.values()]
+            channel.say(', '.join(chan_list))
+
+    @event
+    def on_private_message(self, user, message: PrivateMessage):
+        self.logger.debug(f'Got a private message {message}')
+
+        if message.words[0] == '!say':
+            if len(message.words) >= 3:
+                target_channel: str = message.words[1]
+                text = ' '.join(message.words[2:])
+                self.msg(target_channel, f'{message.sender} told me to say: {text}')
+
+    @event('PRIVMSG')
+    async def on_privmsg(self, message):
+        first_word = message.words[0]
+
+        if first_word == '!except':
+            raise Exception('Test Exception')
+
+        elif first_word == '!quit':
+            await self.network.request_close(message.line)
+
+        elif first_word == '!cancel':
+            self.network._close()
+            self.network.stopped = False
+
+        elif first_word == '!ctcp':
+            if len(message.words) < 2:
+                return
+            self.send_ctcp(message.prefix.name, message.words[1], ' '.join(message.words[2:]))
+
+        elif first_word == '!eat':
+            if len(message.words) == 2:
+                return message.words[1]
+            return ReturnValue.EAT
+
+        elif first_word == '!quote':
+            _, line_to_send = message.line.split(maxsplit=1)
+            self.send_line(line_to_send)

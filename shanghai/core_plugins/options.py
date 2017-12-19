@@ -16,29 +16,28 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from shanghai.event import GlobalEventName, global_event
-from shanghai.irc import Options, ServerReply
-from shanghai.network import NetworkContext
+from ..event import core_event
+from ..plugin_base import Plugin, MessagePlugin
+from ..irc import Options, ServerReply
 
 __plugin_name__ = 'Options'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Handles RPL_ISUPPORT messages'
 
 
-@global_event.core(GlobalEventName.INIT_NETWORK_CTX)
-async def init_context(ctx: NetworkContext):
-    ctx.add_attribute('options', Options())
+class OptionsPlugin(Plugin, MessagePlugin):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        options = Options()
+        self.network.options = Options()
+        for method_name in ('nick_lower', 'chan_lower', 'nick_eq', 'chan_eq'):
+            setattr(self.network, method_name, getattr(options, method_name))
 
-    ctx.add_staticmethod(ctx.options.nick_lower)
-    ctx.add_staticmethod(ctx.options.chan_lower)
-    ctx.add_staticmethod(ctx.options.nick_eq)
-    ctx.add_staticmethod(ctx.options.chan_eq)
-
-    @ctx.message_event.core(ServerReply.RPL_ISUPPORT)
-    async def on_msg_isupport(ctx, message):
-        ctx.options.extend_from_message(message)
+    @core_event(ServerReply.RPL_ISUPPORT)
+    def on_msg_isupport(self, message):
+        self.network.options.extend_from_message(message)
 
     # TODO find a better way to determine that all 005 messages have been seen
-    @ctx.message_event.core(ServerReply.RPL_LUSERCLIENT)
-    async def on_msg_isupport_end(ctx, message):
-        ctx.logger.info(f"Network supports: {ctx.options}")
+    @core_event(ServerReply.RPL_LUSERCLIENT)
+    def on_msg_isupport_end(self, message):
+        self.logger.info(f"Network supports: {self.network.options}")

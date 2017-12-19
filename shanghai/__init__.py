@@ -21,7 +21,7 @@ from typing import Any, Dict, Generator
 
 from .config import ShanghaiConfiguration
 from .network import Network
-from .plugin_system import PluginSystem
+from .plugin_system import PluginManager
 
 __all__ = ('Shanghai')
 
@@ -33,9 +33,9 @@ class Shanghai:
         self.loop = loop
         self.networks: Dict[str, Dict[str, Any]] = {}
 
-        self.core_plugins = PluginSystem('core_plugins', is_core=True)
+        self.core_plugins = PluginManager('core_plugins', is_core=True)
         # TODO: load plugins from configurable location(s)
-        self.user_plugins = PluginSystem('plugins')
+        self.user_plugins = PluginManager('plugins')
 
         self.core_plugins.load_all_plugins()
         self.user_plugins.load_all_plugins()
@@ -43,6 +43,8 @@ class Shanghai:
     def init_networks(self) -> Generator[asyncio.Task, None, None]:
         for netconf in self.config.networks:
             network = Network(netconf, loop=self.loop)
+            network.discover_plugins(self.core_plugins)
+            network.discover_plugins(self.user_plugins)
             network_task = self.loop.create_task(network.run())
             self.networks[netconf.name] = dict(
                 task=network_task,

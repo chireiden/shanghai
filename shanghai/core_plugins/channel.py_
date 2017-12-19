@@ -71,11 +71,11 @@ class ChannelEventDispatcher(EventDispatcher):
         return await super().dispatch(msg.command, context, msg)
 
 
-class BaseMessage(Message):
+class TextMessage(Message):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # some convenience accessors
+        # some convenience attributes
         self.channel = self.params[0]
         self.line = self.params[-1]
         self.words = self.line.split()
@@ -88,14 +88,14 @@ class BaseMessage(Message):
                    tags=message.tags, raw_line=message.raw_line)
 
 
-class ChannelMessage(BaseMessage):
+class ChannelMessage(TextMessage):
     def __repr__(self):
         return (f'<{self.__class__.__name__} type={self.command!r} '
                 f'sender={self.prefix.name!r} source={self.params[0]!r} '
                 f'message={self.params[-1]!r}>')
 
 
-class PrivateMessage(BaseMessage):
+class PrivateMessage(TextMessage):
     def __repr__(self):
         return (f'<{self.__class__.__name__} type={self.command!r} '
                 f'sender={self.prefix.name!r} message={self.params[-1]!r}>')

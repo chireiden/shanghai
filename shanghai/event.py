@@ -19,35 +19,26 @@
 import asyncio
 import functools
 import enum
-from typing import (Any, Awaitable, Callable, Container, DefaultDict, Iterable,
-                    Iterator, List, NamedTuple, Optional, Set, Tuple, TypeVar, cast)
+from typing import (
+    AbstractSet, Any, Callable, Container, Coroutine,
+    DefaultDict, Dict, Iterable, Iterator, List, NamedTuple, Optional,
+    Set, Tuple, TypeVar, Union,
+    cast
+)
 
 from .logging import get_default_logger, Logger, LogLevels
 from .util import repr_func
 
 
-class NetworkEvent(NamedTuple):
-    name: str
-    value: Any = None
+class ReturnValue(NamedTuple):
+    eat: bool = False
+    append_events: Iterable['Event'] = ()
+    schedule: AbstractSet[Coroutine] = frozenset()
 
 
-class NetworkEventName(str, enum.Enum):
-    CONNECTED = "connected"
-    DISCONNECTED = "disconnected"
-    CLOSE_REQUEST = "close_request"
-    MESSAGE = "message"
-    RAW_LINE = "raw_line"
-
-
-class GlobalEventName(str, enum.Enum):
-    INIT_NETWORK_CTX = "init_network_context"
-
-
-class ReturnValue(enum.Enum):
-    EAT = True
-    NONE = None
-
-    _all = (EAT, NONE)
+# define shorthands
+# ReturnValue.NONE = ReturnValue()
+# ReturnValue.EAT = ReturnValue(True)
 
 
 class Priority(int, enum.Enum):
@@ -63,6 +54,15 @@ class Priority(int, enum.Enum):
                 return cast(Priority, v)
         else:
             return priority
+
+
+class Event(NamedTuple):
+    name: str
+    args: Dict[str, Any] = None
+
+
+def build_event(name: str, **kwargs: Any):
+    return Event(name, kwargs)
 
 
 HT = TypeVar('HT')
@@ -122,115 +122,221 @@ class _PrioritizedSetList(Iterable[Tuple[int, Set[HT]]], Container[HT]):
     #     return self.list.sort(key=lambda e: e[0], reversed=True)
 
 
-EventHandler = Callable[..., Awaitable[Optional['ReturnValue']]]
-DecoratorType = Callable[[EventHandler], EventHandler]
+SyncEventHandler = Callable[..., Optional[ReturnValue]]
+AsyncEventHandler = Callable[..., Coroutine[Any, Any, Optional[ReturnValue]]]
+EventHandler = Union[SyncEventHandler, AsyncEventHandler]
 
 
-class EventDecorator:
+class HandlerInfo:
 
-    allowed_names: Container[str] = ()
+    event_name: str
+    handler: EventHandler
+    priority: int
+    should_enable: bool
+    is_async: bool
 
-    def __init__(self, dispatcher: 'EventDispatcher') -> None:
-        self.dispatcher = dispatcher
+    def __init__(self, event_name: Optional[str],
+                 handler: EventHandler,
+                 priority: int,
+                 enable: bool,
+                 ) -> None:
+        is_async = asyncio.iscoroutinefunction(handler)
+        if not (is_async or callable(handler)):
+            raise ValueError("Callable must be a function (`def`)"
+                             " or coroutine function (`async def`)")
+        self.handler = handler
+        if not event_name:
+            event_name = handler.__name__
+            if event_name.startswith("on_"):
+                event_name = event_name[3:]
+        self.event_name = event_name
+        self.priority = Priority.lookup(priority)  # for pretty __repr__
+        self.should_enable = enable
+        self.is_async = is_async
 
-    def __call__(self, name: str, priority: int = Priority.DEFAULT) -> DecoratorType:
-        if self.allowed_names and name not in self.allowed_names:
-            raise ValueError(f"Unknown event name {name!r}")
+    @classmethod
+    def wrap(cls, *args, **kwargs):
+        handler_info = cls(*args, **kwargs)
+        handler_info.handler._h_info = handler_info
+        return handler_info.handler
 
-        def deco(coroutine: EventHandler) -> EventHandler:
-            self.dispatcher.register(name, coroutine, priority)
-            setattr(coroutine, 'unregister',
-                    functools.partial(self.dispatcher.unregister, name, coroutine))
-            return coroutine
+    def __repr__(self):
+        return (f"<{self.__class__.__name__}"
+                f"(event_name={self.event_name}"
+                f", handler={repr_func(self.handler)}"
+                f", priority={self.priority}"
+                f", should_enable={self.should_enable}"
+                ")>")
 
-        return deco
 
-    def core(self, name: str) -> DecoratorType:
-        return self(name, Priority.CORE)
+def event(name_or_func: Union[str, EventHandler],
+          priority: Priority = Priority.DEFAULT,
+          enable: bool = True) -> Union[HandlerInfo, Callable[[Callable], HandlerInfo]]:
+    if isinstance(name_or_func, str):
+        name = name_or_func
+        return functools.partial(HandlerInfo.wrap, name, priority=priority, enable=enable)
+    elif callable(name_or_func):
+        func = name_or_func
+        return HandlerInfo.wrap(None, func, priority, enable)
+    else:
+        raise TypeError("Expected string or callable as first argument")
+
+
+core_event = functools.partial(event, priority=Priority.CORE)
+
+
+class HandlerInstance(NamedTuple):
+
+    """Holds dynamic content about a specific handler instance."""
+
+    handler: EventHandler
+    info: HandlerInfo
+    enabled: bool
+
+    @classmethod
+    def from_handler(cls, handler: EventHandler) -> 'HandlerInstance':
+        if not hasattr(handler, '_h_info'):
+            raise ValueError("Event handler must be decorated with `@event`")
+        h_info: HandlerInfo = handler._h_info  # type: ignore
+        return cls(handler, h_info, h_info.should_enable)
+
+    def __hash__(self):
+        return hash(self.handler)
+
+
+class ResultSet:
+    def __init__(self):
+        self.eat = False
+        self.append_events: List[Event] = []
+        self.schedule: Set[Coroutine] = set()
+
+    def extend(self, other: Union['ResultSet', ReturnValue]):
+        self.eat |= other.eat
+        self.append_events.extend(other.append_events)
+        self.schedule |= other.schedule
+
+    def __iadd__(self, other: Union['ResultSet', ReturnValue]) -> 'ResultSet':
+        self.extend(other)
+        return self
 
 
 class EventDispatcher:
 
-    """Allows to register handlers and to dispatch events to said handlers, by priority."""
+    """Allows to register handlers and to dispatch events to those, by priority."""
 
-    event_map: DefaultDict[str, _PrioritizedSetList[EventHandler]]
+    event_map: DefaultDict[str, _PrioritizedSetList[HandlerInstance]]
     logger: Logger
-    decorator: EventDecorator
 
     def __init__(self, logger: Logger = None) -> None:
         self.event_map = DefaultDict(_PrioritizedSetList)
         self.logger = logger or get_default_logger()
 
-        self.decorator = EventDecorator(self)
+    # def unregister(self, name: str, handler: EventHandler) -> None:
+    #     self.logger.ddebug(f"Unregistering event handler for event {name!r}: {handler}")
+    #     self.event_map[name].remove(handler)
+    #     if not self.event_map[name]:
+    #         del self.event_map[name]
 
-    def unregister(self, name: str, coroutine: EventHandler) -> None:
-        self.logger.ddebug(f"Unregistering event handler for event {name!r}: {coroutine}")
-        self.event_map[name].remove(coroutine)
+    def register(self, handler_inst: HandlerInstance) -> None:
+        h_info = handler_inst.info
+        self.logger.ddebug("Registering event handler for event"
+                           f" {h_info.event_name!r} ({h_info.priority!r}):"
+                           f" {handler_inst.handler}")
 
-    def register(self, name: str, coroutine: EventHandler, priority: int = Priority.DEFAULT) \
-            -> None:
-        priority = Priority.lookup(priority)  # for pretty __repr__
-        self.logger.ddebug(f"Registering event handler for event {name!r} ({priority!r}):"
-                           f" {coroutine}")
-        if not asyncio.iscoroutinefunction(coroutine):
-            raise ValueError("callable must be a coroutine function (defined with `async def`)")
+        self.event_map[h_info.event_name].add(h_info.priority, handler_inst)
 
-        self.event_map[name].add(priority, coroutine)
+    async def dispatch(self, event: Event) -> Optional['ResultSet']:
+        name = event.name
 
-    async def dispatch(self, name: str, *args: Any) -> ReturnValue:
-        self.logger.ddebug(f"Dispatching event {name!r} with arguments {args}")
         if name not in self.event_map:
             self.logger.ddebug(f"No event handlers for event {name!r}")
-            return ReturnValue.NONE
+            return None
 
-        for priority, handlers in self.event_map[name]:
+        joined_result_set = ResultSet()
+        for priority, handler_inst_set in self.event_map[name]:
+            if not handler_inst_set:
+                continue
             priority = Priority.lookup(priority)  # for pretty __repr__
-
-            # Use isEnabledFor because this will be called often
+            # Use isEnabledFor because this will be run often
             is_ddebug = self.logger.isEnabledFor(LogLevels.DDEBUG)
-            if is_ddebug:  # pragma: nocover
-                self.logger.ddebug(f"Creating tasks for event {name!r} ({priority!r}),"
-                                   f" from {set(repr_func(func) for func in handlers)}")
-            tasks = [asyncio.ensure_future(h(*args)) for h in handlers]
+
+            coroutines: List[AsyncEventHandler] = []
+            functions: List[SyncEventHandler] = []
+            for handler_inst in handler_inst_set:
+                if not handler_inst.enabled:
+                    continue
+                if handler_inst.info.is_async:
+                    coroutines.append(handler_inst.handler)  # type: ignore
+                else:
+                    functions.append(handler_inst.handler)  # type: ignore
+
+            # Collect results independently but evaluate them together
+            handlers = cast(List[EventHandler], coroutines) + cast(List[EventHandler], functions)
+            results: List[Union[ReturnValue, Exception]] = []
+
+            if not handlers:
+                self.logger.ddebug(f"No event handlers for event {name!r} at priority {priority}")
+                return None
+
+            if coroutines:
+                tasks = [asyncio.ensure_future(h(**event.args)) for h in coroutines]
+                if is_ddebug:  # pragma: nocover
+                    self.logger.ddebug(f"Starting tasks for event {name!r} ({priority!r});"
+                                       f" tasks: {tasks}")
+                results.extend(await asyncio.gather(*tasks, return_exceptions=True))
+
+            if functions:
+                for handler in functions:
+                    try:
+                        results.append(handler(**event.args))
+                    except Exception as e:
+                        self.logger.exception(
+                            f"Exception in event handler {repr_func(handler)!r} for event {name!r}"
+                            f" ({priority!r}):"
+                        )
+                        results.append(e)
 
             if is_ddebug:  # pragma: nocover
-                self.logger.ddebug(f"Starting tasks for event {name!r} ({priority!r});"
-                                   f" tasks: {tasks}")
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+                self.logger.ddebug(f"Results from event {name!r} ({priority!r}):"
+                                   f" {results}")
 
-            if is_ddebug:  # pragma: nocover
-                self.logger.ddebug(f"Results from event {name!r} ({priority!r}): {results}")
+            result_set = self.handle_results(name, priority, handlers, results)
 
-            eaten = False
-            for handler, task, result in zip(handlers, tasks, results):
-                if isinstance(result, Exception):
-                    self.logger.exception(
-                        f"Exception in event handler {repr_func(handler)!r} for event {name!r}"
-                        f" ({priority!r}):",
-                        exc_info=result
-                    )
+            joined_result_set += result_set
+            if joined_result_set.eat:
+                return joined_result_set
 
-                elif result is ReturnValue.EAT:
-                    self.logger.debug(f"Eating event {name!r} at priority {priority!r}"
-                                      f" at the request of {repr_func(handler)}")
-                    eaten = True
-                elif result not in ReturnValue._all.value:
-                    self.logger.warning(
-                        f"Received unrecognized return value from {repr_func(handler)}"
-                        f" for event {name!r} ({priority!r}): {result!r}"
-                    )
+        return joined_result_set
 
-            if eaten:
-                return ReturnValue.EAT
-        return ReturnValue.NONE
+    def handle_results(self, name, priority, handlers, results) -> ResultSet:
+        result_set = ResultSet()
+        for handler, result in zip(handlers, results):
+            if isinstance(result, Exception):
+                self.logger.exception(
+                    f"Exception in event handler {repr_func(handler)!r} for event {name!r}"
+                    f" ({priority!r}):",
+                    exc_info=result
+                )
+                continue
 
+            if result is None:
+                continue
+            elif not isinstance(result, ReturnValue):
+                self.logger.warning(
+                    f"Received unrecognized return value from {repr_func(handler)}"
+                    f" for event {name!r} ({priority!r}): {result!r}"
+                )
 
-class GlobalEventDispatcher(EventDispatcher):
+            if result.eat:
+                self.logger.debug(f"Eating event {name!r} at priority {priority!r}"
+                                  f" at the request of {repr_func(handler)}")
+            if result.append_events:
+                self.logger.ddebug(f"Appending events {result.append_events}"
+                                   f" at the request of {repr_func(handler)}")
+            if result.schedule:
+                self.logger.debug(f"Scheduling tasks {result.append_events}"
+                                  f" returned from {repr_func(handler)}")
 
-    def __init__(self, logger: Logger = None) -> None:
-        super().__init__(logger)
-        self.decorator.allowed_names = set(GlobalEventName.__members__.values())
+            result_set += result
 
-
-global_dispatcher = GlobalEventDispatcher()
-global_event: EventDecorator = global_dispatcher.decorator
+        return result_set

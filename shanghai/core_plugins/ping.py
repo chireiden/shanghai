@@ -18,83 +18,86 @@
 
 import asyncio
 import time
+from typing import List
 
-from shanghai.event import NetworkEventName, GlobalEventName, global_event
-from shanghai.irc import ServerReply
-from shanghai.network import NetworkContext
+from ..event import core_event
+from ..plugin_base import MessagePlugin, NetworkEventName
+from ..irc import ServerReply, Message
 
 __plugin_name__ = 'PING PONG'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Handles pinging and ponging with networks. Yeah.'
-
-__plugin_depends__ = ('message',)
 
 
 def ms_time() -> int:
     return int(time.time() * 1000)
 
 
-async def pinger(ctx: NetworkContext, ping_evt):
-    while True:
-        ctx.send_cmd('PING', f"LAG_{ms_time()}")
-        ping_evt.set()
-        await asyncio.sleep(30)
+class PingPlugin(MessagePlugin):
 
+    tasks: List[asyncio.Task]
 
-async def pong_waiter(ctx: NetworkContext, ping_evt, pong_evt):
-    while True:
-        await ping_evt.wait()
-        ping_evt.clear()
-        try:
-            await asyncio.wait_for(pong_evt.wait(), 30, loop=ctx.network.loop)
-        except asyncio.TimeoutError:
-            ctx.logger.warning('Detected ping timeout')
-            ctx.network._connection_task.cancel()
-            return
-        else:
-            pong_evt.clear()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ping_evt, self.pong_evt = asyncio.Event(), asyncio.Event()
+        self.tasks = []
 
+    async def pinger(self):
+        while True:
+            self.send_cmd('PING', f"LAG_{ms_time()}")
+            self.ping_evt.set()
+            await asyncio.sleep(60)
 
-@global_event.core(GlobalEventName.INIT_NETWORK_CTX)
-async def init_context(ctx: NetworkContext):
-    ctx.logger.info('initializing context in "ping" plugin.', ctx)
-    ctx.add_attribute('latency', 0)
-
-    @ctx.message_event.core(ServerReply.RPL_WELCOME)
-    async def on_welcome(ctx: NetworkContext, _):
-        ping_evt, pong_evt = asyncio.Event(), asyncio.Event()
-
-        pong_waiter_task = asyncio.ensure_future(pong_waiter(ctx, ping_evt, pong_evt),
-                                                 loop=ctx.network.loop)
-        pinger_task = asyncio.ensure_future(pinger(ctx, ping_evt), loop=ctx.network.loop)
-
-        @ctx.message_event.core('PONG')
-        async def pong(ctx: NetworkContext, msg):
-            text = msg.params[1]
-            if not text.startswith("LAG_"):
+    async def pong_waiter(self):
+        while True:
+            await self.ping_evt.wait()
+            self.ping_evt.clear()
+            try:
+                await asyncio.wait_for(self.pong_evt.wait(), 60, loop=self.network.loop)
+            except asyncio.TimeoutError:
+                self.logger.warning('Detected ping timeout')
+                self.network._connection_task.cancel()
                 return
             else:
-                pong_evt.set()
-                ms = int(text[4:])
-                latency = ms_time() - ms
-                ctx.set_attribute('latency', latency)
-                ctx.logger.debug(f"latency: {latency / 1000:.3f}s")
+                self.pong_evt.clear()
 
-        @ctx.network_event.core(NetworkEventName.DISCONNECTED)
-        async def on_disconnected(ctx: NetworkContext, _):
-            ctx.logger.debug("Cleaning up ping plugin tasks")
-            pong.unregister()
-            on_disconnected.unregister()
+    @core_event(ServerReply.RPL_WELCOME)
+    def on_welcome(self, message):
+        self.ping_evt.clear()
+        self.pong_evt.clear()
 
-            ctx.set_attribute('latency', 0)
-            pong_waiter_task.cancel()
-            pinger_task.cancel()
-            done, pending = await asyncio.wait([pinger_task, pong_waiter_task])
+        loop = self.network.loop
+        assert not self.tasks
+        # could also return these in a ReturnValue
+        self.tasks = [loop.create_task(self.pong_waiter()),
+                      loop.create_task(self.pinger())]
+
+    @core_event('PONG')
+    def pong(self, message: Message):
+        text = message.params[1]
+        if not text.startswith("LAG_"):
+            return
+        else:
+            self.pong_evt.set()
+            ms = int(text[4:])
+            latency = ms_time() - ms
+            self.logger.debug(f"latency: {latency / 1000:.3f}s")
+
+    @core_event(NetworkEventName.DISCONNECTED)
+    async def on_disconnected(self):
+        self.logger.debug("Cleaning up ping plugin tasks")
+
+        if self.tasks:
+            for task in self.tasks:
+                if task:
+                    task.cancel()
+            done, pending = await asyncio.wait(self.tasks)
             if pending:
-                ctx.logger.warning("pending", pending)
+                self.logger.warning("pending", pending)
+            self.tasks = []
 
     # Realistically, we don't need this since we initiate the ping handshare ourselves,
     # but better safe then sorry.
-    @ctx.message_event.core('PING')
+    @core_event('PING')
     async def on_ping(ctx, message):
         ctx.send_cmd('PONG', *message.params)
