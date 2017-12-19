@@ -16,13 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from .message import Message, Prefix
+from .message import CtcpMessage, Message, Prefix
 from .options import Options
 from .server_reply import ServerReply
 
 __all__ = (
-    'Prefix',
+    'CtcpMessage',
     'Message',
     'Options',
+    'Prefix',
     'ServerReply',
 )

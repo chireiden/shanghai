@@ -139,6 +139,7 @@ class HandlerInfo:
                  handler: EventHandler,
                  priority: int,
                  enable: bool,
+                 _prefix: str,
                  ) -> None:
         is_async = asyncio.iscoroutinefunction(handler)
         if not (is_async or callable(handler)):
@@ -149,7 +150,7 @@ class HandlerInfo:
             event_name = handler.__name__
             if event_name.startswith("on_"):
                 event_name = event_name[3:]
-        self.event_name = event_name
+        self.event_name = _prefix + event_name
         self.priority = Priority.lookup(priority)  # for pretty __repr__
         self.should_enable = enable
         self.is_async = is_async
@@ -171,18 +172,34 @@ class HandlerInfo:
 
 def event(name_or_func: Union[str, EventHandler],
           priority: Priority = Priority.DEFAULT,
-          enable: bool = True) -> Union[HandlerInfo, Callable[[Callable], HandlerInfo]]:
+          enable: bool = True,
+          _prefix: str = "",
+          ) -> Union[HandlerInfo, Callable[[Callable], HandlerInfo]]:
+    """Decorate a plugin method as an event.
+
+    If no name is provided,
+    the event name is determined by the function name.
+    It is still recommended to provide the name directly,
+    since some event names are internal and provided via an enum,
+    while server commands are upper-case and event names are case-sensitive.
+
+    `_prefix` can be used with `functools.partial`
+    to provide namespaced sub-events.
+    """
     if isinstance(name_or_func, str):
         name = name_or_func
-        return functools.partial(HandlerInfo.wrap, name, priority=priority, enable=enable)
+        return functools.partial(HandlerInfo.wrap, name,
+                                 priority=priority, enable=enable, _prefix=_prefix)
     elif callable(name_or_func):
         func = name_or_func
-        return HandlerInfo.wrap(None, func, priority, enable)
+        return HandlerInfo.wrap(None, func, priority, enable, _prefix)
     else:
         raise TypeError("Expected string or callable as first argument")
 
 
 core_event = functools.partial(event, priority=Priority.CORE)
+CTCP_PREFIX = "ctcp_"
+ctcp_event = functools.partial(event, _prefix=CTCP_PREFIX)
 
 
 class HandlerInstance(NamedTuple):

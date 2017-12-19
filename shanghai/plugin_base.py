@@ -94,3 +94,26 @@ class MessagePlugin(NetworkPlugin):
     def send_notice(self, target, text):
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('NOTICE', target, text)
+
+
+class CtcpPlugin(MessagePlugin):
+
+    """Base class for plugins that operate on CTCP messages.
+
+    All message events accept a single `message` parameter
+    of the type `shanghai.irc.CtcpMessage`.
+
+    Recognized event names are any ctcp command value,
+    e.g. 'VERSION' or 'TIME'.
+    """
+    def send_ctcp(self, target: str, command: str, text: str = None):
+        if text:
+            text = ' ' + text
+        text = f"\x01{command}{text}\x01"
+        return self.send_msg(target, text)
+
+    def send_ctcp_reply(self, target: str, command: str, text: str = None):
+        if text:
+            text = ' ' + text
+        text = f"\x01{command}{text}\x01"
+        return self.send_notice(target, text)
