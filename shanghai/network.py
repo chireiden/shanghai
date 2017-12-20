@@ -78,6 +78,7 @@ class Network:
 
     async def run(self) -> None:
         for retry in itertools.count(1):
+            self._reset()
             self._connection_task = self.loop.create_task(self._connection.run())
             self._worker_task = self.loop.create_task(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
@@ -90,26 +91,25 @@ class Network:
             # Wait until worker task emptied the queue (and terminates)
             await self._worker_task
             if self.stopped:
-                return
+                break
 
             # We didn't stop, so try to reconnect after a timeout
             seconds = 10 * retry
             self.logger.info(f"Retry connecting in {seconds} seconds")
             await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
-            self._reset()
+
+        # we're leaving, so cancel subtasks
+        for task in self._sub_tasks:
+            task.cancel()
+
+        await asyncio.wait(self._sub_tasks)
 
     def _worker_done(self, task: asyncio.Task) -> None:
-        # Task.add_done_callback expects a Future as the argument of the callable.
-        # https://github.com/python/typeshed/pull/1614
-        # task = cast(asyncio.Task, task)
         assert task is self._worker_task
         if task.cancelled():
             self._connection_task.cancel()
-        else:
-            if not task.exception():
-                self.logger.debug("Worker task exited gracefully")
-                return
 
+        elif task.exception():
             f = io.StringIO()
             task.print_stack(file=f)
             self.logger.error(f.getvalue())
@@ -125,6 +125,10 @@ class Network:
             self.logger.warning("Restarting worker task")
             self._worker_task = self.loop.create_task(self._worker())
             self._worker_task.add_done_callback(self._worker_done)
+
+        else:
+            self.logger.debug("Worker task exited gracefully")
+            return
 
     async def _worker(self) -> None:
         """Dispatches events from the event queue."""
@@ -144,7 +148,7 @@ class Network:
             if task.done():
                 exc = task.exception()
                 if exc:
-                    self.logger.exception("A scheduled subtask failed", exc_info=exc)
+                    self.logger.exception(f"A scheduled subtask failed: {task}", exc_info=exc)
             else:
                 new_tasks.append(task)
 
@@ -158,7 +162,6 @@ class Network:
         self._connection.close()
         self.connected = False
         self.stopped = True
-        # TODO cancel subtasks?
 
     def send_bytes(self, line: bytes) -> None:
         self._connection.writeline(line)
