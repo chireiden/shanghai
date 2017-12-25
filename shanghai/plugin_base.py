@@ -119,6 +119,9 @@ class CtcpPluginMixin(MessagePluginMixin):
         text = f"\x01{command}{text}\x01"
         return self.send_notice(target, text)
 
+    def send_action(self, target: str, text: str = ""):
+        return self.send_ctcp(target, 'ACTION', text)
+
 
 class OptionsPluginMixin:
 
@@ -139,7 +142,7 @@ class OptionsPluginMixin:
         return self.network.options.chan_eq
 
 
-class ChannelPlugin(MessagePluginMixin):
+class ChannelPlugin(CtcpPluginMixin):
 
     """Base class for channel-specific plugins.
 
@@ -154,8 +157,11 @@ class ChannelPlugin(MessagePluginMixin):
         self.logger = channel.logger
         super().__init__()
 
+
+class ChannelMessageMixin(CtcpPluginMixin):
+
     def say(self, text: str):
-        self.network.send_msg(self.channel.name, text)
+        self.send_msg(self.channel.name, text)
 
     def me(self, text: str):
-        self.network.send_action(self.channel.name, text)
+        self.send_action(self.channel.name, text)
