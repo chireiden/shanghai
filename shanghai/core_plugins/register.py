@@ -57,3 +57,11 @@ class RegisterPlugin(Plugin, MessagePlugin):
 
         self.network.nickname = message.params[0]
         self.send_cmd('MODE', self.network.nickname, '+B')
+
+    @core_event('NICK')
+    async def on_nick(self, message: Message):
+        nick = message.prefix.name
+        new_nick = message.params[0]
+
+        if self.network.nick_eq(nick, self.network.nickname):
+            self.network.nickname = new_nick
