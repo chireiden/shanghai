@@ -80,8 +80,8 @@ class PingPlugin(MessagePlugin):
         else:
             self.pong_evt.set()
             ms = int(text[4:])
-            latency = ms_time() - ms
-            self.logger.debug(f"latency: {latency / 1000:.3f}s")
+            latency = (ms_time() - ms) / 1000
+            self.logger.debug(f"latency: {latency:.3f}s")
 
     @core_event(NetworkEventName.DISCONNECTED)
     async def on_disconnected(self):
@@ -97,7 +97,7 @@ class PingPlugin(MessagePlugin):
             self.tasks = []
 
     # Realistically, we don't need this since we initiate the ping handshare ourselves,
-    # but better safe then sorry.
+    # but better safe than sorry.
     @core_event('PING')
     async def on_ping(ctx, message):
         ctx.send_cmd('PONG', *message.params)
