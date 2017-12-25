@@ -272,9 +272,9 @@ class ChannelEventsPlugin(NetworkPlugin, OptionsPluginMixin):
 
     @event('PART', priority=Priority.POST_CORE)
     async def on_part(self, message: Message):
-        channel_name, user, *_ = message.params
+        channel_name = message.params[0]
         lchannel = self.chan_lower(channel_name)
-        if self.nick_eq(self.network.nickname, user):
+        if self.nick_eq(self.network.nickname, message.prefix.name):
             evt = build_event(ChannelEventName.PARTED, message=message)
             channel = self.network.channels[lchannel]
             return await channel._event_dispatcher.dispatch(evt)
