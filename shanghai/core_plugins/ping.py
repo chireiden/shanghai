@@ -21,7 +21,7 @@ import time
 from typing import List
 
 from ..event import core_event
-from ..plugin_base import MessagePlugin, NetworkEventName
+from ..plugin_base import MessagePluginMixin, NetworkPlugin, NetworkEventName
 from ..irc import ServerReply, Message
 
 __plugin_name__ = 'PING PONG'
@@ -33,7 +33,7 @@ def ms_time() -> int:
     return int(time.time() * 1000)
 
 
-class PingPlugin(MessagePlugin):
+class PingPlugin(NetworkPlugin, MessagePluginMixin):
 
     tasks: List[asyncio.Task]
 

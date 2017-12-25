@@ -16,16 +16,16 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from ..event import build_event, core_event, ctcp_event, CTCP_PREFIX, ReturnValue
+from ..event import build_event, core_event, CTCP_PREFIX, ReturnValue
 from ..irc import Message, CtcpMessage
-from ..plugin_base import CtcpPlugin
+from ..plugin_base import CtcpPluginMixin, NetworkPlugin
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'CTCP Message processing'
 
 
-class DefaultCtcpPlugin(CtcpPlugin):
+class ParseCtcpPlugin(NetworkPlugin, CtcpPluginMixin):
     # example ctcp_event hook
     @ctcp_event('VERSION')
     async def version_request(self, message: CtcpMessage):

@@ -17,7 +17,7 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 from ..event import core_event, build_event, ReturnValue
-from ..plugin_base import Plugin, MessagePlugin, NetworkEventName
+from ..plugin_base import NetworkPlugin, MessagePluginMixin, NetworkEventName
 from ..irc import Message
 
 __plugin_name__ = 'Message'
@@ -25,7 +25,7 @@ __plugin_version__ = '0.1.0'
 __plugin_description__ = "Parses 'raw_line' network events and replaces them with message events"
 
 
-class BuildMessagePlugin(Plugin, MessagePlugin):
+class BuildMessagePlugin(NetworkPlugin, MessagePluginMixin):
 
     @core_event(NetworkEventName.RAW_LINE)
     def on_raw_line(self, raw_line: bytes):

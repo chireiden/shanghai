@@ -17,21 +17,15 @@
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
 from ..event import core_event
-from ..plugin_base import Plugin, MessagePlugin
-from ..irc import Options, ServerReply
+from ..plugin_base import NetworkPlugin
+from ..irc import ServerReply
 
 __plugin_name__ = 'Options'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = 'Handles RPL_ISUPPORT messages'
 
 
-class OptionsPlugin(Plugin, MessagePlugin):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        options = Options()
-        self.network.options = Options()
-        for method_name in ('nick_lower', 'chan_lower', 'nick_eq', 'chan_eq'):
-            setattr(self.network, method_name, getattr(options, method_name))
+class ParseOptionsPlugin(NetworkPlugin):
 
     @core_event(ServerReply.RPL_ISUPPORT)
     def on_msg_isupport(self, message):

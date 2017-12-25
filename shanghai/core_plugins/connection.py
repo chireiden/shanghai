@@ -16,15 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from shanghai.event import core_event, event, Priority
-from shanghai.plugin_base import Plugin, MessagePlugin, NetworkEventName
+from ..event import core_event, event, Priority
+from ..plugin_base import MessagePluginMixin, NetworkPlugin, NetworkEventName
 
 __plugin_name__ = 'Connection'
 __plugin_version__ = '0.1.0'
 __plugin_description__ = "Handle connection termination and add some basic logging."
 
 
-class ConnectionPlugin(Plugin, MessagePlugin):
+class ConnectionPlugin(NetworkPlugin, MessagePluginMixin):
 
     @core_event(NetworkEventName.CONNECTED)
     def on_connected(self) -> None:

@@ -20,7 +20,7 @@ import re
 from typing.re import Match
 
 from ..event import core_event
-from ..plugin_base import Plugin, MessagePlugin, NetworkEventName
+from ..plugin_base import MessagePluginMixin, NetworkPlugin, NetworkEventName
 from ..irc import Message, ServerReply
 
 __plugin_name__ = 'Register'
@@ -28,7 +28,7 @@ __plugin_version__ = '0.1.0'
 __plugin_description__ = "Handle registering with the network and nickname collisions"
 
 
-class RegisterPlugin(Plugin, MessagePlugin):
+class RegisterPlugin(NetworkPlugin, MessagePluginMixin):
 
     @core_event(NetworkEventName.CONNECTED)
     def on_connected(self) -> None:

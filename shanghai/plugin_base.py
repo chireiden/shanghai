@@ -18,53 +18,40 @@
 
 import enum
 
-# from ..network import Network
 from .logging import Logger
-
-
-class Plugin:
-    """This is the base class for all plugins. Maybe?"""
-    pass
+# from ..network import Network
 
 
 class NetworkEventName(str, enum.Enum):
-    CONNECTED = 'connected'
-    DISCONNECTED = 'disconnected'
-    CLOSE_REQUEST = 'close_request'
-    MESSAGE = 'message'
-    RAW_LINE = 'raw_line'
+    CONNECTED = 'connected'  # params: ()
+    DISCONNECTED = 'disconnected'  # params: ()
+    CLOSE_REQUEST = 'close_request'  # params: (quitmsg: str)
+    MESSAGE = 'message'  # params: (message: Message)
+    RAW_LINE = 'raw_line'  # params: (raw_line: bytes)
 
 
 class NetworkPlugin:
 
     """Base class for network-specific plugins.
 
-    Shows the accepted hooks and their parameters.
-    Event names are also available in the `NetworkEventName` enum.
+    Standard event names are listed
+    in the `NetworkEventName` enum
+    with their parameters.
+
+    Additional event names are any ServerReply value
+    and any server command like 'KICK' or 'NOTICE'.
+    All message events accept a single `message` parameter
+    of the type `shanghai.irc.Message`.
     """
 
-    def __init__(self, *args, network: 'shanghai.network.Network', logger: Logger, **kwargs) \
-            -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, network: 'shanghai.network.Network', logger: Logger) -> None:
         self.network = network
         self.logger = logger
+        super().__init__()
 
-    # def on_connected(self):
-    #     pass
+class MessagePluginMixin:
 
-    # def on_disconnected(self):
-    #     pass
-
-    # def on_close_request(self, quitmsg: str):
-    #     pass
-
-    # def on_raw_line(self, raw_line: bytes):
-    #     pass
-
-
-class MessagePlugin(NetworkPlugin):
-
-    """Base class for plugins that utilize messages.
+    """Mixin class providing message sending methods.
 
     All message events accept a single `message` parameter
     of the type `shanghai.irc.Message`.
@@ -73,13 +60,13 @@ class MessagePlugin(NetworkPlugin):
     and any server command like 'KICK' or 'NOTICE'.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        super().__init__()
         self._encoding = self.network.config.get('encoding', 'utf-8')
         self._fallback_encoding = self.network.config.get('fallback_encoding', 'latin1')
 
     def send_line(self, line: str):
-        self.network._connection.writeline(line.encode(self._encoding))
+        self.network.send_byteline(line.encode(self._encoding))
 
     def send_cmd(self, command: str, *params: str):
         args = [command, *params]
@@ -96,7 +83,7 @@ class MessagePlugin(NetworkPlugin):
         self.send_cmd('NOTICE', target, text)
 
 
-class CtcpPlugin(MessagePlugin):
+class CtcpPluginMixin(MessagePluginMixin):
 
     """Base class for plugins that operate on CTCP messages.
 
@@ -106,14 +93,33 @@ class CtcpPlugin(MessagePlugin):
     Recognized event names are any ctcp command value,
     e.g. 'VERSION' or 'TIME'.
     """
-    def send_ctcp(self, target: str, command: str, text: str = None):
+    def send_ctcp(self, target: str, command: str, text: str = ""):
         if text:
             text = ' ' + text
         text = f"\x01{command}{text}\x01"
         return self.send_msg(target, text)
 
-    def send_ctcp_reply(self, target: str, command: str, text: str = None):
+    def send_ctcp_reply(self, target: str, command: str, text: str = ""):
         if text:
             text = ' ' + text
         text = f"\x01{command}{text}\x01"
         return self.send_notice(target, text)
+
+
+class OptionsPluginMixin:
+
+    @property
+    def nick_lower(self):
+        return self.network.options.nick_lower
+
+    @property
+    def chan_lower(self):
+        return self.network.options.chan_lower
+
+    @property
+    def nick_eq(self):
+        return self.network.options.nick_eq
+
+    @property
+    def chan_eq(self):
+        return self.network.options.chan_eq
