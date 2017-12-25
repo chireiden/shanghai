@@ -173,8 +173,8 @@ class HandlerInfo:
                 ")>")
 
 
-def event(name_or_func: Union[str, EventHandler],
-          priority: Priority = Priority.DEFAULT,
+def event(name_or_func: Union[str, EventHandler, None] = None,
+          priority: int = Priority.DEFAULT,
           enable: bool = True,
           _prefix: str = "",
           ) -> Union[EventHandler, Callable[[Callable], EventHandler]]:
@@ -233,7 +233,7 @@ class ResultSet:
         self.insert_events: List[Event] = []
         self.schedule: Set[Coroutine] = set()
 
-    def extend(self, other: Union['ResultSet', ReturnValue]):
+    def extend(self, other: Union['ResultSet', ReturnValue, None]):
         if other is None:
             return
         elif isinstance(other, (ReturnValue, ResultSet)):
