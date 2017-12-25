@@ -373,6 +373,7 @@ class EventDispatcher:
                     f"Received unrecognized return value from {repr_func(handler)}"
                     f" for event {name!r} ({priority!r}): {result!r}"
                 )
+                continue
 
             if result.eat:
                 self.logger.debug(f"Eating event {name!r} at priority {priority!r}"
