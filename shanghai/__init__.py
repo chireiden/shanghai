@@ -33,18 +33,22 @@ class Shanghai:
         self.loop = loop
         self.networks: Dict[str, Dict[str, Any]] = {}
 
-        self.core_plugins = PluginManager('core_plugins', is_core=True)
-        # TODO: load plugins from configurable location(s)
-        self.user_plugins = PluginManager('plugins')
+        self.plugin_managers = [
+            # order matters
+            PluginManager('core_plugins', is_core=True),
+            PluginManager('plugins'),
+            # TODO: load plugins from configurable location(s)
+        ]
 
-        self.core_plugins.load_all_plugins()
-        self.user_plugins.load_all_plugins()
+        for manager in self.plugin_managers:
+            manager.load_all_plugins()
 
     def init_networks(self) -> Generator[asyncio.Task, None, None]:
         for netconf in self.config.networks:
             network = Network(netconf, loop=self.loop)
-            network.discover_plugins(self.core_plugins)
-            network.discover_plugins(self.user_plugins)
+            for manager in self.plugin_managers:
+                network.load_plugins(manager)
+
             network_task = self.loop.create_task(network.run())
             self.networks[netconf.name] = dict(
                 task=network_task,

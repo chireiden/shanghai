@@ -21,11 +21,14 @@ import importlib.util
 import pathlib
 import os
 import sys
-from typing import Dict, Iterable, NamedTuple, Union
+from typing import Dict, Generator, Iterable, NamedTuple, Type, TypeVar, Union
 from types import ModuleType
 import keyword
 
 from .logging import get_logger, get_default_logger
+
+T = TypeVar('T')
+TType = Type[T]
 
 
 class CyclicDependency(Exception):
@@ -264,3 +267,17 @@ class PluginManager:
         plugin = PluginModule(module, identifier, self.namespace, info)
         self.logger.info("Loaded plugin", plugin)
         return plugin
+
+    def discover_plugins(self, plugin_class: TType) -> Generator[TType, None, None]:
+        for plugin_mod in self.plugin_registry.values():
+            self.logger.debug(f"scanning for plugins in {plugin_mod}")
+            for name, value in plugin_mod.module.__dict__.items():
+                if name.startswith("_"):
+                    continue
+                if (
+                    isinstance(value, type)
+                    and issubclass(value, plugin_class)
+                    and value is not plugin_class
+                ):
+                    self.logger.info(f"found plugin: {value}")
+                    yield value

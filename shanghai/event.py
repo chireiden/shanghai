@@ -156,9 +156,9 @@ class HandlerInfo:
         self.is_async = is_async
 
     @classmethod
-    def wrap(cls, *args, **kwargs):
+    def wrap(cls, *args, **kwargs) -> EventHandler:
         handler_info = cls(*args, **kwargs)
-        handler_info.handler._h_info = handler_info
+        handler_info.handler._h_info = handler_info  # type: ignore
         return handler_info.handler
 
     def __repr__(self):
@@ -174,7 +174,7 @@ def event(name_or_func: Union[str, EventHandler],
           priority: Priority = Priority.DEFAULT,
           enable: bool = True,
           _prefix: str = "",
-          ) -> Union[HandlerInfo, Callable[[Callable], HandlerInfo]]:
+          ) -> Union[EventHandler, Callable[[Callable], EventHandler]]:
     """Decorate a plugin method as an event.
 
     If no name is provided,
@@ -262,7 +262,15 @@ class EventDispatcher:
 
         self.event_map[h_info.event_name].add(h_info.priority, handler_inst)
 
-    async def dispatch(self, event: Event) -> Optional['ResultSet']:
+    def register_plugin(self, plugin: Any):
+        for attr_name in dir(plugin):
+            attr = getattr(plugin, attr_name)
+            if hasattr(attr, '_h_info'):
+                handler = cast(EventHandler, attr)
+                handler_inst = HandlerInstance.from_handler(handler)
+                self.register(handler_inst)
+
+    async def dispatch(self, event: Event) -> Optional[ResultSet]:
         name = event.name
 
         if name not in self.event_map:

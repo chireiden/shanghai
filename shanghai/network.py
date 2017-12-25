@@ -53,9 +53,10 @@ class Network:
         self.config = config
         self.loop = loop or asyncio.get_event_loop()
         self.logger = get_logger('network', self.name, config)
+        self.plugin_managers: List[PluginManager] = []
 
         self._event_dispatcher = EventDispatcher(logger=self.logger)
-        self._loaded_plugins: Set[NetworkPlugin] = set()
+        self._plugins: Set[NetworkPlugin] = set()
         self._sub_tasks: List[asyncio.Task] = []
         self._server_iter: Iterator[Server] = itertools.cycle(self.config.servers)
         self._worker_task_failure_timestamps: List[float] = []
@@ -134,7 +135,9 @@ class Network:
         """Dispatches events from the event queue."""
         while not (self._connection_task.done() and self.event_queue.empty()):
             event = await self.event_queue.get()
-            self.logger.debug(f"Dispatching {event}")
+            if event.name != NetworkEventName.RAW_LINE:
+                # too spammy
+                self.logger.debug(f"Dispatching {event}")
             result = await self._event_dispatcher.dispatch(event)
             if result:
                 self._manage_subtasks(result.schedule)
@@ -163,7 +166,7 @@ class Network:
         self.connected = False
         self.stopped = True
 
-    def send_bytes(self, line: bytes) -> None:
+    def send_byteline(self, line: bytes) -> None:
         self._connection.writeline(line)
 
     def request_close(self, quitmsg: str = None) -> None:
@@ -171,28 +174,14 @@ class Network:
         evt = build_event(NetworkEventName.CLOSE_REQUEST, quitmsg=quitmsg)
         self.event_queue.put_nowait(evt)
 
-    def discover_plugins(self, manager: PluginManager):
-        for plugin_mod in manager.plugin_registry.values():
-            self.logger.debug(f"scanning for plugins in {plugin_mod}")
-            # TODO ignore plugins according to config
-            for name, value in plugin_mod.module.__dict__.items():
-                if isinstance(value, type) and issubclass(value, NetworkPlugin):
-                    self.logger.info(f"found plugin: {value}")
-                    plugin = value(network=self, logger=self.logger)
-                    self._loaded_plugins.add(plugin)
-                    for attr_name in dir(plugin):
-                        attr = getattr(plugin, attr_name)
-                        if hasattr(attr, '_h_info'):
-                            handler_inst = HandlerInstance.from_handler(attr)
-                            self._event_dispatcher.register(handler_inst)
+    def load_plugins(self, manager: PluginManager):
+        self.plugin_managers.append(manager)
+        plugin_classes = set(manager.discover_plugins(NetworkPlugin))
+        # TODO ignore/filter plugins according to config
+        new_plugins = {plug(network=self, logger=self.logger)
+                       for plug in plugin_classes}
+        self._plugins |= new_plugins
 
-    # TODO move to channel plugin
-    # @core_event(ServerReply.RPL_WELCOME)
-    # async def on_msg_welcome(self, message: Message) -> None:
-    #     # join channels
-    #     for channel, chanconf in self.network.config.get('channels', {}).items():
-    #         key = chanconf.get('key', None)
-    #         if key is not None:
-    #             self.send_cmd('JOIN', channel, key)
-    #         else:
-    #             self.send_cmd('JOIN', channel)
+        for plugin in new_plugins:
+            self._event_dispatcher.register_plugin(plugin)
+        # TODO store plugin instance somewhere for unregistering
