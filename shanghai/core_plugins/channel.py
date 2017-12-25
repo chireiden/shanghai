@@ -87,7 +87,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
         self.network.users[lnick] = message.prefix
 
         if (lchannel, lnick) not in self._joins:
-            self._joins[(lchannel, lnick)] = {'modes': []}  # extra info dict, for e.g. modes
+            self._joins[(lchannel, lnick)] = {'modes': ""}  # extra info dict, for e.g. modes
 
         if new_channel:
             return ReturnValue(schedule={new_channel._run()})
