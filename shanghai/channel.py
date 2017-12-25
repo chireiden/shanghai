@@ -41,7 +41,8 @@ class Channel:
     # modes: ChannelModes
     # _nw_join_list: Dict[Tuple[str, str], Dict]
 
-    def __init__(self, network: 'shanghai.network.Network',
+    def __init__(self,
+                 network: 'shanghai.network.Network',
                  name: str,
                  nw_join_list: Dict[Tuple[str, str], Dict],
                  ) -> None:
@@ -114,3 +115,6 @@ class Channel:
             for plugin in new_plugins:
                 self._event_dispatcher.register_plugin(plugin)
             # TODO store plugin instance somewhere for unregistering
+
+    def __repr__(self) -> str:
+        return f"Channel(name={self.name!r}, network={self.network!r})"

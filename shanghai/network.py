@@ -191,3 +191,6 @@ class Network:
         for plugin in new_plugins:
             self._event_dispatcher.register_plugin(plugin)
         # TODO store plugin instance somewhere for unregistering
+
+    def __repr__(self) -> str:
+        return f"Network(name={self.name!r}, nickname={self.nickname!r})"
