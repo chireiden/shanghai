@@ -26,8 +26,12 @@ class NetworkEventName(str, enum.Enum):
     CONNECTED = 'connected'  # params: ()
     DISCONNECTED = 'disconnected'  # params: ()
     CLOSE_REQUEST = 'close_request'  # params: (quitmsg: str)
-    MESSAGE = 'message'  # params: (message: Message)
     RAW_LINE = 'raw_line'  # params: (raw_line: bytes)
+
+    # emitted by core plugins
+    MESSAGE = 'message'  # params: (message: Message)
+    PRIVATE_MESSAGE = 'private_message'  # params: (message: PrivateMessage)
+    PRIVATE_NOTICE = 'private_notice'  # params: (message: PrivateNotice)
 
 
 class ChannelEventName(str, enum.Enum):
@@ -35,12 +39,8 @@ class ChannelEventName(str, enum.Enum):
     PARTED = 'parted'  # params: (message: Message)
     KICKED = 'kicked'  # params: (message: Message)
     DISCONNECTED = NetworkEventName.DISCONNECTED  # params: ()
-    MESSAGE = 'chan_message'  # params: (message: ChannelMessage)
-    NOTICE = 'chan_notice'  # params: (message: ChannelNotice)
-
-    # TODO move
-    PRIV_MESSAGE = 'priv_message'
-    PRIV_NOTICE = 'priv_notice'
+    MESSAGE = 'channel_message'  # params: (message: ChannelMessage)
+    NOTICE = 'channel_notice'  # params: (message: ChannelNotice)
 
 
 class NetworkPlugin:

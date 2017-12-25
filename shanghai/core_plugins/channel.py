@@ -318,9 +318,9 @@ class ChannelEventsPlugin(NetworkPlugin, OptionsPluginMixin):
         else:
             # we were the target
             if message.command == 'PRIVMSG':
-                message_type, evt_name = PrivateMessage, ChannelEventName.PRIV_MESSAGE
+                message_type, evt_name = PrivateMessage, NetworkEventName.PRIVATE_MESSAGE
             else:
-                message_type, evt_name = PrivateNotice, ChannelEventName.PRIV_NOTICE
+                message_type, evt_name = PrivateNotice, NetworkEventName.PRIVATE_NOTICE
 
             new_message = message_type.from_message(message)
             evt = build_event(evt_name, message=new_message)
