@@ -40,4 +40,4 @@ class DefaultCtcpPlugin(CtcpPlugin):
             return
 
         evt = build_event(CTCP_PREFIX + ctcp_msg.command, message=ctcp_msg)
-        return ReturnValue(append_events=(evt,))
+        return ReturnValue(insert_events=(evt,))

@@ -33,6 +33,7 @@ from .util import repr_func
 class ReturnValue(NamedTuple):
     eat: bool = False
     append_events: Iterable['Event'] = ()
+    insert_events: Iterable['Event'] = ()
     schedule: AbstractSet[Coroutine] = frozenset()
 
 
@@ -225,12 +226,19 @@ class ResultSet:
     def __init__(self):
         self.eat = False
         self.append_events: List[Event] = []
+        self.insert_events: List[Event] = []
         self.schedule: Set[Coroutine] = set()
 
     def extend(self, other: Union['ResultSet', ReturnValue]):
-        self.eat |= other.eat
-        self.append_events.extend(other.append_events)
-        self.schedule |= other.schedule
+        if other is None:
+            return
+        elif isinstance(other, (ReturnValue, ResultSet)):
+            self.eat |= other.eat
+            self.append_events.extend(other.append_events)
+            self.insert_events.extend(other.insert_events)
+            self.schedule |= other.schedule
+        else:
+            raise NotImplementedError()
 
     def __iadd__(self, other: Union['ResultSet', ReturnValue]) -> 'ResultSet':
         self.extend(other)
@@ -331,6 +339,16 @@ class EventDispatcher:
             if joined_result_set.eat:
                 return joined_result_set
 
+        events_to_insert = joined_result_set.insert_events[:]
+        for followup_event in events_to_insert:
+            self.logger.debug(f"Dispatching {followup_event!r} from event {name!r}")
+            result_set = await self.dispatch(followup_event)
+            if result_set and result_set.insert_events:
+                events_to_insert.extend(result_set.insert_events)  # TOTEST
+            joined_result_set += result_set
+
+        # Clear these when we are done
+        joined_result_set.insert_events = []
         return joined_result_set
 
     def handle_results(self, name, priority, handlers, results) -> ResultSet:
@@ -346,7 +364,7 @@ class EventDispatcher:
 
             if result is None:
                 continue
-            elif not isinstance(result, ReturnValue):
+            elif not isinstance(result, (ResultSet, ReturnValue)):
                 self.logger.warning(
                     f"Received unrecognized return value from {repr_func(handler)}"
                     f" for event {name!r} ({priority!r}): {result!r}"

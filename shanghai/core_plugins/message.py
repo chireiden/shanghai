@@ -36,8 +36,8 @@ class BuildMessagePlugin(Plugin, MessagePlugin):
         try:
             msg = Message.from_line(line)
         except Exception as exc:
-            self.network.exception('-->', line)
+            self.logger.exception('-->', line)
             raise
 
         msg_event = build_event(msg.command, message=msg)
-        return ReturnValue(append_events=(msg_event,))
+        return ReturnValue(insert_events=(msg_event,))
