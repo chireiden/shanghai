@@ -160,3 +160,49 @@ class CtcpMessage(Message):
 
         fields = {**msg._asdict(), 'command': ctcp_cmd, 'params': ctcp_params}
         return cls(**fields)  # type: ignore
+
+
+class TextMessage(Message):
+    # abstract base class
+    # with some convenience properties
+    @property
+    def target(self):
+        return self.params[0]
+
+    @property
+    def line(self):
+        return self.params[1]
+
+    @property
+    def words(self):
+        return self.params[1].split()
+
+    @property
+    def sender(self):
+        return self.prefix.name
+
+    @classmethod
+    def from_message(cls, message: Message):
+        assert len(message.params) == 2
+        return cls(**message._asdict())
+
+
+# TODO do we need these "specialized" classes at all?
+class ChannelMessage(TextMessage):
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}'
+                f' sender={self.sender!r} target={self.target!r} message={self.line!r}>')
+
+
+class PrivateMessage(TextMessage):
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}'
+                f' sender={self.sender!r} message={self.line!r}>')
+
+
+class ChannelNotice(ChannelMessage):
+    pass
+
+
+class PrivateNotice(PrivateMessage):
+    pass

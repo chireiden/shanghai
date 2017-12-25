@@ -20,14 +20,15 @@ import asyncio
 import io
 import itertools
 import time
-from typing import Coroutine, Iterable, Iterator, List, Optional, Set
+from typing import Coroutine, Dict, Iterable, Iterator, List, Optional, Set
 
 from .connection import Connection
 from .config import NetworkConfiguration, Server
-from .event import build_event, EventDispatcher, HandlerInstance
+from .event import build_event, EventDispatcher
 from .plugin_system import PluginManager
 from .plugin_base import NetworkPlugin, NetworkEventName
-from .irc import Options
+from .irc import Options, Prefix
+from .channel import Channel
 from .logging import get_logger
 
 
@@ -41,6 +42,8 @@ class Network:
     realname: str
     vhost: str
     options: Options
+    channels: Dict[str, Channel]
+    users: Dict[str, Prefix]
 
     event_queue: asyncio.Queue
     _connection: Connection
@@ -69,6 +72,8 @@ class Network:
         self.realname = ""
         self.vhost = ""
         self.options = Options()
+        self.channels = {}
+        self.users = {}
 
         self.stopped = False
         self.connected = False

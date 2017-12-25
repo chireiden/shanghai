@@ -30,6 +30,19 @@ class NetworkEventName(str, enum.Enum):
     RAW_LINE = 'raw_line'  # params: (raw_line: bytes)
 
 
+class ChannelEventName(str, enum.Enum):
+    JOINED = 'joined'  # params: ()
+    PARTED = 'parted'  # params: (message: Message)
+    KICKED = 'kicked'  # params: (message: Message)
+    DISCONNECTED = NetworkEventName.DISCONNECTED  # params: ()
+    MESSAGE = 'chan_message'  # params: (message: ChannelMessage)
+    NOTICE = 'chan_notice'  # params: (message: ChannelNotice)
+
+    # TODO move
+    PRIV_MESSAGE = 'priv_message'
+    PRIV_NOTICE = 'priv_notice'
+
+
 class NetworkPlugin:
 
     """Base class for network-specific plugins.
@@ -48,6 +61,7 @@ class NetworkPlugin:
         self.network = network
         self.logger = logger
         super().__init__()
+
 
 class MessagePluginMixin:
 
@@ -123,3 +137,25 @@ class OptionsPluginMixin:
     @property
     def chan_eq(self):
         return self.network.options.chan_eq
+
+
+class ChannelPlugin(MessagePluginMixin):
+
+    """Base class for channel-specific plugins.
+
+    Event names are listed
+    in the `ChannelEventName` enum
+    with their parameters.
+    """
+
+    def __init__(self, channel: 'shanghai.channel.Channel') -> None:
+        self.channel = channel
+        self.network = channel.network
+        self.logger = channel.logger
+        super().__init__()
+
+    def say(self, text: str):
+        self.network.send_msg(self.channel.name, text)
+
+    def me(self, text: str):
+        self.network.send_action(self.channel.name, text)
