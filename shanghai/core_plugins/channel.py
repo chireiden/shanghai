@@ -62,7 +62,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
     @core_event('JOIN')
     async def on_join(self, message: Message):
         if not message.params:
-            self.logger.info(f'No channel given {message}')
+            self.logger.warning(f'No channel given {message}')
             return
         channel = message.params[0]
         lchannel = self.chan_lower(channel)
@@ -76,7 +76,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
                 self.network.channels[lchannel] = new_channel
 
         elif lchannel not in self.network.channels:
-            self.logger.warn(f"Got message from channel we're not in: {message!r}")
+            self.logger.warning(f"Got message from channel we're not in: {message!r}")
             return
 
         # Add nickname to list and join channel.
@@ -96,7 +96,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
     def on_names(self, message: Message):
         lchannel = self.chan_lower(message.params[2])
         if lchannel not in self.network.channels:
-            self.logger.warn(f"Got message from channel we're not in: {message!r}")
+            self.logger.warning(f"Got message from channel we're not in: {message!r}")
             return
 
         if lchannel not in self._collecting_names:
@@ -125,7 +125,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
     def on_names_end(self, message: Message):
         lchannel = self.chan_lower(message.params[1])
         if lchannel not in self.network.channels:
-            self.logger.warn(f"Got message from channel we're not in: {message!r}")
+            self.logger.warning(f"Got message from channel we're not in: {message!r}")
             return
 
         self._collecting_names.discard(lchannel)
@@ -135,7 +135,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
         lchannel = self.chan_lower(message.params[0])
 
         if lchannel not in self.network.channels:
-            self.logger.warn(f"Got message from channel we're not in: {message!r}")
+            self.logger.warning(f"Got message from channel we're not in: {message!r}")
             return
 
         nick = message.prefix.name
@@ -155,7 +155,7 @@ class ChannelStatePlugin(NetworkPlugin, MessagePluginMixin, OptionsPluginMixin):
         lchannel = self.chan_lower(message.params[0])
 
         if lchannel not in self.network.channels:
-            self.logger.warn(f'Got message from channel we\'re not in: {message!r}')
+            self.logger.warning(f'Got message from channel we\'re not in: {message!r}')
             return
 
         kicked = message.params[1]
@@ -303,7 +303,7 @@ class ChannelEventsPlugin(NetworkPlugin, OptionsPluginMixin):
         if lchannel[0] in opt_chantypes:
             # target is a channel
             if lchannel not in self.network.channels:
-                self.logger.warn(f"Got message from channel we're not in: {message!r}")
+                self.logger.warning(f"Got message from channel we're not in: {message!r}")
                 return
             if message.command == 'PRIVMSG':
                 message_type, evt_name = ChannelMessage, ChannelEventName.MESSAGE
@@ -325,6 +325,8 @@ class ChannelEventsPlugin(NetworkPlugin, OptionsPluginMixin):
             new_message = message_type.from_message(message)
             evt = build_event(evt_name, message=new_message)
             return ReturnValue(insert_events=(evt,))
+
+    # TODO mode changes
 
     @core_event(NetworkEventName.DISCONNECTED)
     async def on_disconnected(self):
