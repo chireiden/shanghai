@@ -16,22 +16,19 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from ..event import build_event, core_event, CTCP_PREFIX, ReturnValue
-from ..irc import Message, CtcpMessage
-from ..plugin_base import NetworkPlugin
+from ..event import ctcp_event
+from ..irc import CtcpMessage
+from ..plugin_base import CtcpPluginMixin, NetworkPlugin
 
 __plugin_name__ = 'CTCP'
 __plugin_version__ = '0.1.0'
-__plugin_description__ = 'CTCP Message processing'
+__plugin_description__ = 'Default CTCP event handlers'
 
 
-class ParseCtcpPlugin(NetworkPlugin):
+class DefaultCtcpPlugin(NetworkPlugin, CtcpPluginMixin):
 
-    @core_event('PRIVMSG')
-    async def privmsg(self, message: Message):
-        ctcp_msg = CtcpMessage.from_message(message)
-        if not ctcp_msg:
-            return
-
-        evt = build_event(CTCP_PREFIX + ctcp_msg.command, message=ctcp_msg)
-        return ReturnValue(insert_events=(evt,))
+    @ctcp_event('VERSION')
+    async def on_ctcp_version(self, message: CtcpMessage):
+        source = message.prefix[0]
+        self.send_ctcp_reply(source, 'VERSION',
+                             "Shanghai v37 - https://github.com/chireiden/shanghai")
