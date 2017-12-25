@@ -100,10 +100,11 @@ class Network:
             await asyncio.sleep(seconds)  # TODO doesn't terminate if KeyboardInterrupt occurs here
 
         # we're leaving, so cancel subtasks
-        for task in self._sub_tasks:
-            task.cancel()
+        if self._sub_tasks:
+            for task in self._sub_tasks:
+                task.cancel()
 
-        await asyncio.wait(self._sub_tasks)
+            await asyncio.wait(self._sub_tasks)
 
     def _worker_done(self, task: asyncio.Task) -> None:
         assert task is self._worker_task
