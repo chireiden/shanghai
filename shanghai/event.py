@@ -196,8 +196,10 @@ def event(name_or_func: Union[str, EventHandler],
     elif callable(name_or_func):
         func = name_or_func
         return HandlerInfo.wrap(None, func, priority, enable, _prefix)
+    elif name_or_func is None:
+        return functools.partial(event, priority=priority, enable=enable, _prefix=_prefix)
     else:
-        raise TypeError("Expected string or callable as first argument")
+        raise TypeError("Expected string, callable or None as first argument")
 
 
 core_event = functools.partial(event, priority=Priority.CORE)
