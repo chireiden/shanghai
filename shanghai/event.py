@@ -207,13 +207,18 @@ CTCP_PREFIX = "ctcp_"
 ctcp_event = functools.partial(event, _prefix=CTCP_PREFIX)
 
 
-class HandlerInstance(NamedTuple):
+class HandlerInstance:
 
     """Holds dynamic content about a specific handler instance."""
 
     handler: EventHandler
     info: HandlerInfo
     enabled: bool
+
+    def __init__(self, handler: EventHandler, info: HandlerInfo, enabled: bool):
+        self.handler = handler
+        self.info = info
+        self.enabled = enabled
 
     @classmethod
     def from_handler(cls, handler: EventHandler) -> 'HandlerInstance':
