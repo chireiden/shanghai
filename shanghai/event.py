@@ -335,10 +335,6 @@ class EventDispatcher:
                     try:
                         results.append(handler(**event.args))
                     except Exception as e:
-                        self.logger.exception(
-                            f"Exception in event handler {repr_func(handler)!r} for event {name!r}"
-                            f" ({priority!r}):"
-                        )
                         results.append(e)
 
             if is_ddebug:  # pragma: nocover
