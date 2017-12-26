@@ -351,12 +351,9 @@ class EventDispatcher:
             if joined_result_set.eat:
                 return joined_result_set
 
-        events_to_insert = joined_result_set.insert_events[:]
-        for followup_event in events_to_insert:
+        for followup_event in joined_result_set.insert_events:
             self.logger.debug(f"Dispatching {followup_event!r} from event {name!r}")
             result_set = await self.dispatch(followup_event)
-            if result_set and result_set.insert_events:
-                events_to_insert.extend(result_set.insert_events)  # TOTEST
             joined_result_set += result_set
 
         # Clear these when we are done
