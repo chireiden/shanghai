@@ -48,7 +48,7 @@ class Priority(int, enum.Enum):
     POST_CORE = -5
     PRE_DEFAULT = -10
     DEFAULT = -15
-    POST_DEFAULT = -10
+    POST_DEFAULT = -20
 
     @classmethod
     def lookup(cls, priority: int) -> int:
