@@ -242,7 +242,8 @@ class ResultSet:
         if other is None:
             return
         elif isinstance(other, (ReturnValue, ResultSet)):
-            self.eat |= other.eat
+            # I have no idea why mypy things this is an int
+            self.eat |= other.eat  # type: ignore
             self.append_events.extend(other.append_events)
             self.insert_events.extend(other.insert_events)
             self.schedule |= other.schedule

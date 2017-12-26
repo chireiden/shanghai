@@ -19,7 +19,9 @@
 import enum
 
 from .logging import Logger
-# from ..network import Network
+# recursive imports:
+# from .network import Network
+# from .channel import Channel
 
 
 class NetworkEventName(str, enum.Enum):
@@ -74,25 +76,26 @@ class MessagePluginMixin:
     and any server command like 'KICK' or 'NOTICE'.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-        self._encoding = self.network.config.get('encoding', 'utf-8')
-        self._fallback_encoding = self.network.config.get('fallback_encoding', 'latin1')
+        self._encoding = self.network.config.get('encoding', 'utf-8')  # type: ignore
+        self._fallback_encoding = self.network.config.get('fallback_encoding',  # type: ignore
+                                                          'latin1')
 
-    def send_line(self, line: str):
-        self.network.send_byteline(line.encode(self._encoding))
+    def send_line(self, line: str) -> None:
+        self.network.send_byteline(line.encode(self._encoding))  # type: ignore
 
-    def send_cmd(self, command: str, *params: str):
+    def send_cmd(self, command: str, *params: str) -> None:
         args = [command, *params]
         if ' ' in args[-1]:
             args[-1] = f":{args[-1]}"
         self.send_line(' '.join(args))
 
-    def send_msg(self, target, text):
+    def send_msg(self, target, text) -> None:
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('PRIVMSG', target, text)
 
-    def send_notice(self, target, text):
+    def send_notice(self, target, text) -> None:
         # TODO split messages that are too long into multiple, also newlines
         self.send_cmd('NOTICE', target, text)
 
@@ -107,20 +110,20 @@ class CtcpPluginMixin(MessagePluginMixin):
     Recognized event names are any ctcp command value,
     e.g. 'VERSION' or 'TIME'.
     """
-    def send_ctcp(self, target: str, command: str, text: str = ""):
+    def send_ctcp(self, target: str, command: str, text: str = "") -> None:
         if text:
             text = ' ' + text
         text = f"\x01{command}{text}\x01"
-        return self.send_msg(target, text)
+        self.send_msg(target, text)
 
-    def send_ctcp_reply(self, target: str, command: str, text: str = ""):
+    def send_ctcp_reply(self, target: str, command: str, text: str = "") -> None:
         if text:
             text = ' ' + text
         text = f"\x01{command}{text}\x01"
-        return self.send_notice(target, text)
+        self.send_notice(target, text)
 
-    def send_action(self, target: str, text: str = ""):
-        return self.send_ctcp(target, 'ACTION', text)
+    def send_action(self, target: str, text: str = "") -> None:
+        self.send_ctcp(target, 'ACTION', text)
 
 
 class OptionsPluginMixin:
@@ -160,8 +163,8 @@ class ChannelPlugin(CtcpPluginMixin):
 
 class ChannelMessageMixin(CtcpPluginMixin):
 
-    def say(self, text: str):
-        self.send_msg(self.channel.name, text)
+    def say(self, text: str) -> None:
+        self.send_msg(self.channel.name, text)  # type: ignore
 
-    def me(self, text: str):
-        self.send_action(self.channel.name, text)
+    def me(self, text: str) -> None:
+        self.send_action(self.channel.name, text)  # type: ignore
