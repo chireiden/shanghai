@@ -279,13 +279,16 @@ class EventDispatcher:
 
         self.event_map[h_info.event_name].add(h_info.priority, handler_inst)
 
-    def register_plugin(self, plugin: Any):
+    def register_plugin(self, plugin: Any) -> List[HandlerInstance]:
+        instances: List[HandlerInstance] = []
         for attr_name in dir(plugin):
             attr = getattr(plugin, attr_name)
             if hasattr(attr, '_h_info'):
                 handler = cast(EventHandler, attr)
                 handler_inst = HandlerInstance.from_handler(handler)
                 self.register(handler_inst)
+                instances.append(handler_inst)
+        return instances
 
     async def dispatch(self, event: Event) -> Optional[ResultSet]:
         name = event.name
