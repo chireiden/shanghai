@@ -146,8 +146,8 @@ class HandlerInfo:
                  ) -> None:
         is_async = asyncio.iscoroutinefunction(handler)
         if not (is_async or callable(handler)):
-            raise ValueError("Callable must be a function (`def`)"
-                             " or coroutine function (`async def`)")
+            raise TypeError("Callable must be a function (`def`)"
+                            " or coroutine function (`async def`)")
         self.handler = handler
         if not event_name:
             event_name = handler.__name__
