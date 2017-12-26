@@ -172,7 +172,7 @@ def get_logger(context: str, name: str,
                open_msg: bool = False,
                ) -> Logger:
     """
-    context: i.e. 'network', 'channel', 'core', whatvever.
+    context: i.e. 'network', 'channel', 'core', whatever.
     name: some preferably unique name inside of context
           e.g. 'freenode' in context 'network'
     """
