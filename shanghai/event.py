@@ -325,7 +325,7 @@ class EventDispatcher:
 
             if coroutines:
                 tasks = [asyncio.ensure_future(h(**event.args)) for h in coroutines]
-                if is_ddebug:  # pragma: nocover
+                if is_ddebug:
                     self.logger.ddebug(f"Starting tasks for event {name!r} ({priority!r});"
                                        f" tasks: {tasks}")
                 results.extend(await asyncio.gather(*tasks, return_exceptions=True))
@@ -337,7 +337,7 @@ class EventDispatcher:
                     except Exception as e:
                         results.append(e)
 
-            if is_ddebug:  # pragma: nocover
+            if is_ddebug:
                 self.logger.ddebug(f"Results from event {name!r} ({priority!r}):"
                                    f" {results}")
 
