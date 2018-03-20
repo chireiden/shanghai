@@ -27,7 +27,6 @@ import colorama
 
 from . import Shanghai
 from .config import ShanghaiConfiguration
-from .event import global_dispatcher
 from .logging import set_default_logger, get_logger, LogLevels
 
 
@@ -103,7 +102,6 @@ def main() -> None:
 
     default_logger = get_logger('main', 'main.py', config, open_msg=True)
     set_default_logger(default_logger)
-    global_dispatcher.logger = get_logger('main', 'event.py', config)
 
     try:
         import uvloop
@@ -133,7 +131,7 @@ def main() -> None:
                 print(f"network {nw_name!r} not found")
                 return
             network = bot.networks[nw_name]['network']
-            network._context.send_line(irc_line)
+            network.send_byteline(irc_line.encode('utf-8'))
 
     print("\nnetworks:", ", ".join(bot.networks.keys()), end="\n\n")
     stdin_reader_task = asyncio.ensure_future(stdin_reader(loop, input_handler))
@@ -141,14 +139,14 @@ def main() -> None:
     try:
         loop.run_until_complete(asyncio.wait(network_tasks, loop=loop))
     except KeyboardInterrupt:
-        default_logger.warn("cancelled by user")
+        default_logger.warn("Cancelled by user")
         # schedule close event
         bot.stop_networks()
         task = asyncio.wait(network_tasks, loop=loop, timeout=5)
         done, pending = loop.run_until_complete(task)
         if pending:
-            default_logger.error("The following tasks didn't terminate within the set"
-                                 " timeout: %s", pending)
+            default_logger.error("The following tasks didn't terminate"
+                                 f" within the set timeout: {pending}")
     else:
         default_logger.info("All network tasks terminated")
 

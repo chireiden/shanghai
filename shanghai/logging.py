@@ -91,6 +91,9 @@ class TerminalColor(str, Enum):
 
     @classmethod
     def for_level(cls, level: int) -> str:
+        # mypy has issues here.
+        # https://github.com/python/mypy/issues/3622
+        # -> https://github.com/python/typeshed/issues/1595
         for log_level in sorted(LogLevels, reverse=True):  # type: ignore
             if level >= log_level.value:
                 level_name: str = getattr(cls, log_level.name, "")
@@ -169,7 +172,7 @@ def get_logger(context: str, name: str,
                open_msg: bool = False,
                ) -> Logger:
     """
-    context: i.e. 'network', 'channel', 'core', whatvever.
+    context: i.e. 'network', 'channel', 'core', whatever.
     name: some preferably unique name inside of context
           e.g. 'freenode' in context 'network'
     """

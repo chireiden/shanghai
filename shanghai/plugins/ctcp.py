@@ -16,11 +16,19 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from typing import Callable
+from ..event import ctcp_event
+from ..irc import CtcpMessage
+from ..plugin_base import CtcpPluginMixin, NetworkPlugin
 
-from fullqualname import fullqualname
+__plugin_name__ = 'CTCP'
+__plugin_version__ = '0.1.0'
+__plugin_description__ = 'Default CTCP event handlers'
 
 
-def repr_func(func: Callable) -> str:
-    """Represent a function with its full qualname instead of just its name and an address."""
-    return f"<{type(func).__name__} {fullqualname(func)}>"
+class DefaultCtcpPlugin(NetworkPlugin, CtcpPluginMixin):
+
+    @ctcp_event('VERSION')
+    async def on_ctcp_version(self, message: CtcpMessage):
+        source = message.prefix[0]
+        self.send_ctcp_reply(source, 'VERSION',
+                             "Shanghai v37 - https://github.com/chireiden/shanghai")

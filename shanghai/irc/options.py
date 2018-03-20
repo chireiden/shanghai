@@ -18,7 +18,7 @@
 
 import re
 import string
-from typing import Dict, Iterator, MutableMapping, Tuple, Union
+from typing import Dict, Iterator, MutableMapping, Optional, Tuple, Union
 
 from .message import Message
 from .server_reply import ServerReply
@@ -27,7 +27,7 @@ from .server_reply import ServerReply
 DEFAULT_CASE_MAPPING = 'rfc1459'
 
 
-def _generate_case_table(case_mapping: str) -> Dict[int, str]:
+def _generate_case_table(case_mapping: str) -> Dict[int, Optional[int]]:
     case_mapping = case_mapping.lower()
     if case_mapping not in ('ascii', 'rfc1459', 'strict-rfc1459'):
         # TODO log warning

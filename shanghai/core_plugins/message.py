@@ -16,74 +16,28 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from shanghai.event import (
-    GlobalEventName, NetworkEventName, Priority,
-    EventDispatcher, global_event
-)
-from shanghai.irc import Message
+from ..event import core_event, build_event, ReturnValue
+from ..plugin_base import NetworkPlugin, MessagePluginMixin, NetworkEventName
+from ..irc import Message
 
 __plugin_name__ = 'Message'
 __plugin_version__ = '0.1.0'
-__plugin_description__ = "Parses 'raw_line' network events and emits message events"
+__plugin_description__ = "Parses 'raw_line' network events and replaces them with message events"
 
 
-class MessageEventDispatcher(EventDispatcher):
+class BuildMessagePlugin(NetworkPlugin, MessagePluginMixin):
 
-    def __init__(self, context, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.context = context
-
-    async def dispatch(self, msg):
-        return await super().dispatch(msg.command, self.context, msg)
-
-
-@global_event(GlobalEventName.INIT_NETWORK_CTX, priority=Priority.PRE_CORE)
-async def init_context(ctx):
-    msg_evt_disp = MessageEventDispatcher(ctx)
-    ctx.add_attribute('message_event', msg_evt_disp.decorator)
-    ctx.logger.debug("created MessageEventDispatcher")
-
-    encoding = ctx.network.config.get('encoding', 'utf-8')
-    fallback_encoding = ctx.network.config.get('fallback_encoding', 'latin1')
-
-    @ctx.add_method
-    def send_line(ctx, line: str):
-        ctx.network._connection.writeline(line.encode(encoding))
-
-    @ctx.add_method
-    def send_cmd(self, command: str, *params: str):
-        args = [command, *params]
-        if ' ' in args[-1]:
-            args[-1] = f":{args[-1]}"
-        ctx.send_line(' '.join(args))
-
-    @ctx.add_method
-    def send_msg(ctx, target, text):
-        # TODO split messages that are too long into multiple, also newlines
-        ctx.send_cmd('PRIVMSG', target, text)
-
-    @ctx.add_method
-    def send_notice(ctx, target, text):
-        # TODO split messages that are too long into multiple, also newlines
-        ctx.send_cmd('NOTICE', target, text)
-
-    @ctx.network_event.core(NetworkEventName.RAW_LINE)
-    async def on_raw_line(ctx, raw_line: bytes):
+    @core_event(NetworkEventName.RAW_LINE)
+    def on_raw_line(self, raw_line: bytes):
         try:
-            line = raw_line.decode(encoding)
+            line = raw_line.decode(self._encoding)
         except UnicodeDecodeError:
-            line = raw_line.decode(fallback_encoding, 'replace')
+            line = raw_line.decode(self._fallback_encoding, 'replace')
         try:
             msg = Message.from_line(line)
         except Exception as exc:
-            ctx.network.exception('-->', line)
-            raise exc
+            self.logger.exception('-->', line)
+            raise
 
-        await msg_evt_disp.dispatch(msg)
-
-    @ctx.network_event.core(NetworkEventName.CLOSE_REQUEST)
-    async def on_close_request(ctx, quitmsg):
-        if quitmsg:
-            ctx.send_cmd('QUIT', quitmsg)
-        else:
-            ctx.send_cmd('QUIT')
+        msg_event = build_event(msg.command, message=msg)
+        return ReturnValue(insert_events=(msg_event,))

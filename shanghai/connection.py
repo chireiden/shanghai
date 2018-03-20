@@ -19,7 +19,8 @@
 import asyncio
 
 from .config import Server
-from .event import NetworkEvent, NetworkEventName
+from .event import build_event
+from .plugin_base import NetworkEventName
 from .logging import Logger, get_default_logger
 
 
@@ -46,7 +47,6 @@ class Connection:
         self.writer.write(b'\r\n')
 
     def close(self) -> None:
-        self.logger.debug("closing connection")
         self.writer.close()
 
     async def run(self) -> None:
@@ -56,20 +56,21 @@ class Connection:
         )
         self.writer = writer
 
-        await self.queue.put(NetworkEvent('connected', self))
+        await self.queue.put(build_event(NetworkEventName.CONNECTED))
 
         try:
             while not reader.at_eof():
                 line = await reader.readline()
-                line = line.strip()
+                line = line.strip()  # TODO remove?
                 self.logger.debug(">", line)
                 if line:
-                    event = NetworkEvent(NetworkEventName.RAW_LINE, line)
+                    event = build_event(NetworkEventName.RAW_LINE, raw_line=line)
                     await self.queue.put(event)
         except asyncio.CancelledError:
             self.logger.info("Connection.run was cancelled")
         except ConnectionResetError as e:
             self.logger.warning(f"connection was reset; {e}")
         finally:
+            self.logger.debug("closing connection")
             self.close()
-            await self.queue.put(NetworkEvent('disconnected', None))
+            await self.queue.put(build_event(NetworkEventName.DISCONNECTED))

@@ -21,18 +21,21 @@ import importlib.util
 import pathlib
 import os
 import sys
-from typing import Dict, Iterable, NamedTuple, Union
+from typing import Dict, Generator, Iterable, NamedTuple, Type, TypeVar, Union
 from types import ModuleType
 import keyword
 
 from .logging import get_logger, get_default_logger
+
+T = TypeVar('T')
+TType = Type[T]
 
 
 class CyclicDependency(Exception):
     pass
 
 
-class PluginInfo(NamedTuple):
+class PluginModuleInfo(NamedTuple):
 
     """Storage type holding infor about a plugin."""
 
@@ -43,12 +46,12 @@ class PluginInfo(NamedTuple):
     conflicts: Iterable[str] = ()
 
     @classmethod
-    def read_from_file(cls, path: pathlib.Path, identifier: str) -> 'PluginInfo':
+    def read_from_file(cls, path: pathlib.Path, identifier: str) -> 'PluginModuleInfo':
         with path.open('r', encoding='utf-8') as f:
             tree = ast.parse(f.read(), str(path))
 
         info_dict: Dict[str, Union[str, Iterable]] = {}
-        required_ids = set(cls._field_defaults.keys())
+        required_ids = set(cls._fields) - set(cls._field_defaults.keys())
 
         for statement in tree.body:
             if not isinstance(statement, ast.Assign):
@@ -92,10 +95,11 @@ class PluginInfo(NamedTuple):
         return cls(**info_dict)  # type: ignore
 
 
-class Plugin:
+class PluginModule:
 
-    def __init__(self, module: ModuleType, identifier: str, namespace: str, info: PluginInfo) \
-            -> None:
+    def __init__(self, module: ModuleType, identifier: str, namespace: str,
+                 info: PluginModuleInfo
+                 ) -> None:
         self.module = module
         self.identifier = identifier
         self.namespace = namespace
@@ -105,17 +109,19 @@ class Plugin:
         self.module_name = module.__name__
 
     def __repr__(self) -> str:
-        return (f"<Plugin {self.module_name}:"
+        return (f"<PluginModule {self.module_name}:"
                 f" {self.info.name} {self.info.version} - {self.info.description}>")
 
 
-class PluginSystem:
+class PluginManager:
+
     if sys.platform == 'win32':
-        # %APPDATA%/shanghai/plugins
         _home_config_path = pathlib.Path(os.path.expandvars(R"%APPDATA%\shanghai"))
     else:
-        # ~/.config/shanghai/plugins
-        _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
+        if 'XDG_CONFIG_HOME' in os.environ:
+            _home_config_path = pathlib.Path(os.path.expandvars("$XDG_CONFIG_HOME/shanghai"))
+        else:
+            _home_config_path = pathlib.Path("~/.config/shanghai").expanduser()
 
     _shanghai_base_path = pathlib.Path(__file__).parent
 
@@ -129,7 +135,7 @@ class PluginSystem:
         _shanghai_base_path,
     ]
 
-    plugin_registry: Dict[str, Plugin]
+    plugin_registry: Dict[str, PluginModule]
 
     def __init__(self, namespace: str, is_core: bool = False) -> None:
         # TODO add search base paths parameter
@@ -148,7 +154,7 @@ class PluginSystem:
         sys.modules[f'{__package__}.{namespace}'] = self
 
         if is_core:
-            # just search in one single path
+            # just search in base path
             self.plugin_search_paths = [pathlib.Path(self._shanghai_base_path, namespace)]
         else:
             self.plugin_search_paths = [pathlib.Path(base_path, namespace)
@@ -173,7 +179,7 @@ class PluginSystem:
         loaded_before = set(self.plugin_registry.keys())
         for identifier, module_path in plugins_to_load.items():
             if identifier in loaded_before:
-                self.logger.warn(f"Plugin {identifier!r} already exists")
+                self.logger.warn(f"PluginModule {identifier!r} already exists")
                 continue
             elif identifier in self.plugin_registry:
                 continue  # loaded as a dependency
@@ -186,7 +192,7 @@ class PluginSystem:
     def load_plugin(self, identifier: str, *,
                     dependency_path: Iterable[str] = (),
                     is_core: bool = False,
-                    ) -> Plugin:
+                    ) -> PluginModule:
         if not identifier.isidentifier():
             raise ValueError(f"Invalid plugin name. {identifier!r} contains invalid symbol(s).")
         if keyword.iskeyword(identifier):
@@ -194,7 +200,7 @@ class PluginSystem:
 
         if identifier in self.plugin_registry:
             if not dependency_path:
-                self.logger.warn(f"Plugin {identifier!r} already exists")
+                self.logger.warn(f"PluginModule {identifier!r} already exists")
             return self.plugin_registry[identifier]
 
         for search_path in self.plugin_search_paths:
@@ -207,7 +213,7 @@ class PluginSystem:
         else:
             raise FileNotFoundError(
                 f"Could not find plugin {identifier!r} in any of the search paths:"
-                + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
+                "\n  " + "".join(f'\n  {path!s}' for path in self.plugin_search_paths)
             )
 
         plugin = self._load_plugin_as_module(module_path, identifier,
@@ -215,13 +221,13 @@ class PluginSystem:
         self._register_plugin(plugin)
         return plugin
 
-    def _register_plugin(self, plugin: Plugin) -> None:
+    def _register_plugin(self, plugin: PluginModule) -> None:
         self.plugin_registry[plugin.identifier] = plugin
         sys.modules[plugin.module_name] = plugin.module
         self.logger.debug(f"Setting sys.modules[{plugin.module_name!r}] to {plugin.module}")
 
-    @classmethod
-    def _find_module_path(cls, search_path: pathlib.Path, identifier: str) -> pathlib.Path:
+    @staticmethod
+    def _find_module_path(search_path: pathlib.Path, identifier: str) -> pathlib.Path:
         path = pathlib.Path(search_path, identifier)
         module_path = path.with_suffix(".py")
         if not module_path.exists():
@@ -232,8 +238,8 @@ class PluginSystem:
 
     def _load_plugin_as_module(self, path: pathlib.Path, identifier: str, *,
                                dependency_path: Iterable[str] = (),
-                               ) -> Plugin:
-        info = PluginInfo.read_from_file(path, identifier)
+                               ) -> PluginModule:
+        info = PluginModuleInfo.read_from_file(path, identifier)
 
         # TODO info.conflicts
         for dependency in info.depends:
@@ -256,8 +262,22 @@ class PluginSystem:
         if spec.loader is None:
             raise ImportError("No loader for module available")
         spec.loader.exec_module(module)
-        self.logger.info("Found plugin in", module.__file__)
+        self.logger.debug("Found plugin in", module.__file__)
 
-        plugin = Plugin(module, identifier, self.namespace, info)
+        plugin = PluginModule(module, identifier, self.namespace, info)
         self.logger.info("Loaded plugin", plugin)
         return plugin
+
+    def discover_plugins(self, plugin_class: TType) -> Generator[TType, None, None]:
+        for plugin_mod in self.plugin_registry.values():
+            self.logger.debug(f"scanning for plugins in {plugin_mod}")
+            for name, value in plugin_mod.module.__dict__.items():
+                if name.startswith("_"):
+                    continue
+                if (
+                    isinstance(value, type)
+                    and issubclass(value, plugin_class)
+                    and value is not plugin_class
+                ):
+                    self.logger.info(f"found plugin: {value}")
+                    yield value

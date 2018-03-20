@@ -22,8 +22,11 @@ from unittest import mock
 import pytest
 
 from shanghai import event
-from shanghai import network
-from shanghai.logging import Logger
+from shanghai.logging import Logger, get_logger, LogLevels
+
+# use this when debug log output is desired
+debug_logger = get_logger('logging', 'debug')
+debug_logger.setLevel(LogLevels.DDEBUG)
 
 
 @pytest.fixture
@@ -31,23 +34,51 @@ def loop():
     return asyncio.get_event_loop()
 
 
+@pytest.fixture
+def evt():
+    return event.build_event("event")
+
+
+# base class to subclass for an actual plugin
+class BasePlugin:
+    pass
+
+
+@pytest.fixture
+def sample_plugin():
+    class TestPlugin(BasePlugin):
+        @event.event
+        def on_test(self):
+            pass
+
+    return TestPlugin
+
+
 class TestPriority:
 
-    def test_core_gt_default(self):
-        assert event.Priority.CORE > event.Priority.DEFAULT
+    def test_type(self):
+        assert isinstance(event.Priority.DEFAULT, int)
+
+    def test_order(self):
+        assert (event.Priority.PRE_CORE
+                > event.Priority.CORE
+                > event.Priority.POST_CORE
+                > event.Priority.PRE_DEFAULT
+                > event.Priority.DEFAULT
+                > event.Priority.POST_DEFAULT)
+
+    def test_lookup(self):
+        assert event.Priority.lookup(event.Priority.CORE) is event.Priority.CORE
+        assert event.Priority.lookup(event.Priority.CORE.value) is event.Priority.CORE
+        assert event.Priority.lookup(-12312412) == -12312412
 
 
-class TestNetworkEvent:
+class TestEvent:
 
-    def test_attributes(self):
-        a, b = object(), object()
-        evt = event.NetworkEvent(a, b)
-        assert evt.name is a
-        assert evt.value is b
-
-    def test_default_argument(self):
-        evt = event.NetworkEvent('string')
-        assert evt.value is None
+    def test_build_event(self):
+        evt = event.build_event("evt_name", arg1="val1", arg2=None)
+        assert evt.name == "evt_name"
+        assert evt.args == {'arg1': "val1", 'arg2': None}
 
 
 class TestPrioritizedSetList:
@@ -127,199 +158,360 @@ class TestPrioritizedSetList:
         excinfo.match(r"can not be found")
 
 
-class TestEventDispatchers:
+# Skipping HandlerInfo tests
+# since that is only to be used with the `event` decorator anyway.
+class TestEventDecorator:
+
+    def test_no_param_usage(self):
+        @event.event
+        def func_name(self):
+            pass
+
+        @event.event
+        def on_test(self):
+            pass
+
+        assert hasattr(on_test, '_h_info')
+        h_info = on_test._h_info
+        assert h_info.event_name == "test"
+        assert func_name._h_info.event_name == "func_name"
+        assert h_info.handler is on_test
+        assert h_info.priority is event.Priority.DEFAULT
+        assert h_info.should_enable
+        assert not h_info.is_async
+
+    def test_param_usage(self):
+        @event.event('evt_test', priority=-12, enable=False)
+        def on_test(self):
+            pass
+
+        assert hasattr(on_test, '_h_info')
+        h_info = on_test._h_info
+        assert h_info.event_name == 'evt_test'
+        assert h_info.handler is on_test
+        assert h_info.priority == -12
+        assert not h_info.should_enable
+        assert not h_info.is_async
+
+    def test_async_handler(self):
+        @event.event(enable=False)
+        async def on_async_test(self):
+            pass
+
+        assert hasattr(on_async_test, '_h_info')
+        h_info = on_async_test._h_info
+        assert h_info.event_name == 'async_test'
+        assert h_info.handler is on_async_test
+        assert h_info.priority is event.Priority.DEFAULT
+        assert not h_info.should_enable
+        assert h_info.is_async
+
+    def test_prefix(self):
+        import functools
+        other_event_deco = functools.partial(event.event, _prefix="__test_")
+
+        @other_event_deco
+        def on_test(self):
+            pass
+
+        assert hasattr(on_test, '_h_info')
+        h_info = on_test._h_info
+        assert h_info.event_name == '__test_test'
+
+    def test_core_event_deco(self):
+        @event.core_event
+        def on_test(self):
+            pass
+
+        assert hasattr(on_test, '_h_info')
+        h_info = on_test._h_info
+        assert h_info.priority is event.Priority.CORE
+
+    def test_non_callable(self):
+        with pytest.raises(TypeError) as excinfo:
+            event.event(123)
+        excinfo.match(r"Expected string, callable or None as first argument")
+
+        with pytest.raises(TypeError) as excinfo:
+            event.event("name")([])
+        excinfo.match(r"Callable must be a function \(`def`\)"
+                      r" or coroutine function \(`async def`\)")
+
+
+class TestHandlerInstance:
+
+    def test_from_handler(self):
+        @event.event
+        def handler():
+            pass
+
+        h_inst = event.HandlerInstance.from_handler(handler)
+        assert h_inst.info is handler._h_info
+        assert h_inst.enabled
+        assert h_inst.handler is handler._h_info.handler
+
+    def test_from_not_handler(self):
+        def func():
+            pass
+
+        with pytest.raises(ValueError) as excinfo:
+            event.HandlerInstance.from_handler(func)
+        excinfo.match(r"Event handler must be decorated with `@event`")
+
+    def test_hash(self):
+        @event.event
+        def handler():
+            pass
+
+        h_inst = event.HandlerInstance.from_handler(handler)
+        h_inst2 = event.HandlerInstance.from_handler(handler)
+        assert h_inst is not h_inst2
+        assert hash(h_inst) == hash(h_inst2)
+        assert h_inst != h_inst2
+
+
+class TestResultSet:
+
+    def test_extend(self, evt, loop):
+        async def corofunc():
+            pass
+
+        coro = corofunc()
+        coro2 = corofunc()
+        # silence "coroutine never awaited" warnings
+        loop.run_until_complete(coro)
+        loop.run_until_complete(coro2)
+
+        rval = event.ReturnValue(append_events=[evt])
+        rval2 = event.ReturnValue(eat=True, schedule={coro})
+        rval3 = event.ReturnValue(append_events=[evt], insert_events=[evt],
+                                  schedule={coro, coro2})
+
+        rset = event.ResultSet()
+        rset2 = event.ResultSet()
+
+        rset.extend(rval)
+        assert not rset.eat
+        assert rset.append_events == [evt]
+        rset.extend(rval2)
+        assert rset.eat
+        assert rset.schedule == {coro}
+        rset2.extend(rval3)
+        rset.extend(rset2)
+        rset.extend(None)
+        assert rset.eat
+        assert rset.append_events == [evt, evt]
+        assert rset.insert_events == [evt]
+        assert rset.schedule == {coro, coro2}
+
+    def test_iadd(self, evt):
+        rval = event.ReturnValue(append_events=[evt])
+        rval2 = event.ReturnValue(eat=True, append_events=[evt])
+        rset = event.ResultSet()
+
+        rset += rval
+        rset += rval2
+        rset += None
+        assert rset.eat
+        assert rset.append_events == [evt, evt]
+
+    def test_type(self):
+        rset = event.ResultSet()
+        with pytest.raises(NotImplementedError):
+            rset.extend([])
+        with pytest.raises(NotImplementedError):
+            rset.extend(False)
+
+
+class TestEventDispatcher:
 
     @pytest.fixture
     def dispatcher(self):
         return event.EventDispatcher()
 
     def test_register(self, dispatcher):
+        name = "some_name"
 
-        async def coroutinefunc(*args):
+        @event.event(name)
+        async def corofunc(*args):
             return True
 
-        dispatcher.register("some_name", coroutinefunc)
-        assert coroutinefunc in dispatcher.event_map["some_name"]
+        h_inst = event.HandlerInstance.from_handler(corofunc)
+        dispatcher.register(h_inst)
+        assert h_inst in dispatcher.event_map["some_name"]
 
-    def test_unregister(self, dispatcher):
+    def test_register_plugin(self, dispatcher):
+        name = "some_name"
 
-        async def coroutinefunc(*args):
-            return True
+        class AClass:
+            @event.event(name)
+            def handler(self):
+                pass
 
-        dispatcher.register("some_name", coroutinefunc)
-        dispatcher.unregister("some_name", coroutinefunc)
-        assert coroutinefunc not in dispatcher.event_map["some_name"]
-        with pytest.raises(ValueError) as excinfo:
-            dispatcher.unregister("some_name", coroutinefunc)
-        excinfo.match(r"Object .* can not be found")
+            @event.event(name)
+            async def hander(self):
+                pass
 
-    def test_register_callable(self, dispatcher):
-
-        with pytest.raises(ValueError) as excinfo:
-            dispatcher.register("some_name", lambda: None)
-        excinfo.match(r"callable must be a coroutine function")
+        obj = AClass()
+        h_insts = dispatcher.register_plugin(obj)
+        assert len(dispatcher.event_map) == 1
+        assert len(h_insts) == 2
+        for h_inst in h_insts:
+            assert h_inst in dispatcher.event_map[name]
 
     def test_dispatch(self, dispatcher, loop):
         name = "some_name"
-        args = list(range(10))
+        args = dict(zip(map(str, range(10)), range(10, 20)))
         called = 0
 
-        async def coroutinefunc(*local_args):
+        @event.event(name)
+        async def corofunc(**local_args):
             nonlocal called
-            assert list(local_args) == args
+            assert local_args == args
             called += 1
 
-        dispatcher.register(name, coroutinefunc)
-        loop.run_until_complete(dispatcher.dispatch(name, *args))
-        loop.run_until_complete(dispatcher.dispatch(name + '_', *args))
+        h_inst = event.HandlerInstance.from_handler(corofunc)
+        dispatcher.register(h_inst)
+        evt = event.Event(name, args)
+        evt2 = evt._replace(name=evt.name + "_")
+        loop.run_until_complete(dispatcher.dispatch(evt))
+        loop.run_until_complete(dispatcher.dispatch(evt2))
 
         assert called == 1
 
-    def test_dispatch_priority(self, dispatcher, loop):
-        name = "some_name"
+    def test_dispatch_priority(self, dispatcher, loop, evt):
         called = list()
 
-        async def coroutinefunc():
-            called.append(coroutinefunc)
+        @event.event(evt.name, priority=0)
+        async def corofunc():
+            called.append(corofunc)
 
-        async def coroutinefunc2():
-            called.append(coroutinefunc2)
+        @event.event(evt.name, priority=1)
+        def corofunc2():
+            called.append(corofunc2)
 
-        dispatcher.register(name, coroutinefunc)
-        dispatcher.register(name, coroutinefunc2, priority=event.Priority.DEFAULT + 1)
-        loop.run_until_complete(dispatcher.dispatch(name))
+        h_inst = event.HandlerInstance.from_handler(corofunc)
+        h_inst2 = event.HandlerInstance.from_handler(corofunc2)
+        dispatcher.register(h_inst)
+        dispatcher.register(h_inst2)
+        loop.run_until_complete(dispatcher.dispatch(evt))
 
-        assert called == [coroutinefunc2, coroutinefunc]
+        assert called == [corofunc2, corofunc]
 
-    def test_network_dispatch(self, loop):
-        context = mock.Mock()
-        dispatcher = network.NetworkEventDispatcher(context)
-        evt = event.NetworkEvent("name", 456)
-        called = False
+    def test_dispatch_disabled(self, dispatcher, loop, evt):
+        called = 0
 
-        async def coroutinefunc(ctx, value):
+        @event.event(evt.name, enable=False)
+        async def corofunc():
             nonlocal called
-            assert ctx is context
-            assert value == 456
-            called = True
+            called += 1
 
-        dispatcher.register("name", coroutinefunc)
-        loop.run_until_complete(dispatcher.dispatch_nwevent(evt))
+        h_inst = event.HandlerInstance.from_handler(corofunc)
+        dispatcher.register(h_inst)
+        loop.run_until_complete(dispatcher.dispatch(evt))
+        assert called == 0
 
-        assert called
+    # TODO test disabled
 
-    def test_dispatch_eat(self, loop):
+    def test_dispatch_exception(self, loop, evt):
         logger = mock.Mock(Logger)
         dispatcher = event.EventDispatcher(logger=logger)
-        called = [False] * 3
+        called = 0
 
-        async def coroutinefunc():
-            called[0] = True
-
-        async def coroutinefunc2():
-            called[1] = True
-            return event.ReturnValue.EAT
-
-        async def coroutinefunc3():
-            called[2] = True
-
-        dispatcher.register("name", coroutinefunc, event.Priority.DEFAULT + 1)
-        dispatcher.register("name", coroutinefunc2)
-        dispatcher.register("name", coroutinefunc3, event.Priority.DEFAULT - 1)
-        result = loop.run_until_complete(dispatcher.dispatch("name"))
-        assert result is event.ReturnValue.EAT
-        assert called == [True, True, False]
-
-    def test_dispatch_exception(self, loop):
-        logger = mock.Mock(Logger)
-        dispatcher = event.EventDispatcher(logger=logger)
-        called = False
-
-        async def coroutinefunc():
+        @event.event(evt.name)
+        async def corofunc():
             nonlocal called
-            called = True
-            raise ValueError("yeah")
+            called += 1
+            raise ValueError("yeah async")
 
-        dispatcher.register("name", coroutinefunc)
+        @event.event(evt.name)
+        def handler():
+            nonlocal called
+            called += 1
+            raise ValueError("yeah sync")
+
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc))
+        dispatcher.register(event.HandlerInstance.from_handler(handler))
         assert not logger.exception.called
-        loop.run_until_complete(dispatcher.dispatch("name"))
-        assert logger.exception.call_count == 1
-        assert called
+        loop.run_until_complete(dispatcher.dispatch(evt))
+        assert called == 2
+        assert logger.exception.call_count == 2
 
-    def test_dispatch_unknown_return(self, loop):
+    def test_dispatch_unknown_return(self, loop, evt):
         logger = mock.Mock(Logger)
         dispatcher = event.EventDispatcher(logger=logger)
         called = False
 
-        async def coroutinefunc():
+        @event.event(evt.name)
+        async def corofunc():
             nonlocal called
             called = True
             return "some arbitrary value"
 
-        dispatcher.register("name", coroutinefunc)
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc))
         assert not logger.warning.called
-        loop.run_until_complete(dispatcher.dispatch("name"))
-        assert logger.warning.call_count == 1
+        loop.run_until_complete(dispatcher.dispatch(evt))
         assert called
+        assert logger.warning.call_count == 1
 
+    def test_dispatch_eat(self, loop, evt):
+        dispatcher = event.EventDispatcher()
+        called = [False] * 3
 
-class TestEventDecorator:
+        @event.event(evt.name, priority=1)
+        def corofunc():
+            called[0] = True
 
-    @pytest.fixture
-    def nw_evt_disp(self):
-        context = mock.Mock()
-        return network.NetworkEventDispatcher(context)
+        @event.event(evt.name, priority=0)
+        async def corofunc2():
+            called[1] = True
+            return event.ReturnValue(eat=True)
 
-    def test_calls_register(self):
-        dispatcher = mock.Mock(event.EventDispatcher)
-        deco = event.EventDecorator(dispatcher)
-        evt_name = "evt"
+        @event.event(evt.name, priority=-1)
+        async def corofunc3():
+            called[2] = True
 
-        @deco(evt_name)
-        async def on_connected(ctx, _):
-            pass
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc))
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc2))
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc3))
+        result = loop.run_until_complete(dispatcher.dispatch(evt))
+        assert result.eat
+        assert called == [True, True, False]
 
-        dispatcher.register.assert_called_with(evt_name, on_connected, event.Priority.DEFAULT)
+    def test_dispatch_nested_insert(self, loop, evt):
+        dispatcher = event.EventDispatcher()
+        called = [0] * 3
+        evt1 = evt
+        evt2 = evt._replace(name=evt.name + "_")
+        evt3 = evt._replace(name=evt.name + "__")
 
-        on_connected.unregister()
-        dispatcher.unregister.assert_called_with(evt_name, on_connected)
+        @event.event(evt.name)
+        def corofunc1():
+            called[0] += 1
+            return event.ReturnValue(insert_events=[evt2], append_events=[evt])
 
-    def test_core_calls_register(self):
-        dispatcher = mock.Mock(event.EventDispatcher)
-        deco = event.EventDecorator(dispatcher)
-        evt_name = "core_evt"
+        @event.event(evt2.name)
+        def corofunc2():
+            called[1] += 1
+            return event.ReturnValue(insert_events=[evt3], append_events=[evt2])
 
-        @deco.core(evt_name)
-        async def on_connected(ctx, _):
-            pass
+        @event.event(evt3.name)
+        def corofunc3():
+            called[2] += 1
 
-        dispatcher.register.assert_called_with(evt_name, on_connected, event.Priority.CORE)
-
-        on_connected.unregister()
-        dispatcher.unregister.assert_called_with(evt_name, on_connected)
-
-    def test_network_event(self, nw_evt_disp):
-        deco = nw_evt_disp.decorator
-        evt_name = event.NetworkEventName.CONNECTED
-
-        @deco(evt_name)
-        async def on_connected(ctx, _):
-            pass
-
-        prio_set_list = nw_evt_disp.event_map[evt_name]
-        assert on_connected in prio_set_list
-
-    def test_network_event_exists(self, nw_evt_disp):
-        deco = nw_evt_disp.decorator
-
-        with pytest.raises(ValueError) as excinfo:
-            @deco(123)
-            async def x():
+            async def corofunc():
                 pass
-        excinfo.match(f"Unknown event name 123")
 
-        with pytest.raises(ValueError) as excinfo:
-            @deco('name')
-            async def xx():
-                pass
-        excinfo.match(f"Unknown event name 'name'")
+            return event.ReturnValue(append_events=[evt3], schedule={corofunc()})
+
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc1))
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc2))
+        dispatcher.register(event.HandlerInstance.from_handler(corofunc3))
+        result = loop.run_until_complete(dispatcher.dispatch(evt))
+        assert called == [1, 1, 1]
+        assert result.append_events == [evt1, evt2, evt3]
+        assert len(result.schedule) == 1
+        # prevent warnings again
+        loop.run_until_complete(next(iter(result.schedule)))
+
+    # TODO other ReturnValue tests

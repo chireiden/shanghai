@@ -19,6 +19,7 @@
 import pytest
 
 from shanghai.irc import Prefix, Message, ServerReply
+from shanghai.irc.message import CtcpMessage, TextMessage
 
 
 class TestPrefix:
@@ -43,7 +44,7 @@ class TestPrefix:
         assert str(prefix) == string.lstrip(':')
 
 
-class TestMessage():
+class TestMessage:
 
     def test_privmsg(self):
         m = Message.from_line(':nick!user@host PRIVMSG #channel :Some message')
@@ -102,3 +103,37 @@ class TestMessage():
                     tags=\{\}\)''',
             repr(m)
         )
+
+
+class TestCtcpMessage:
+
+    def test_message(self):
+        m = Message.from_line(':nick!user@host PRIVMSG #channel :\001PING PONG\001')
+        cm = CtcpMessage.from_message(m)
+        assert cm.command == "PING"
+        assert cm.params == ["PONG"]
+        assert cm.prefix == m.prefix
+
+    def test_not_message(self):
+        m = Message.from_line(':nick!user@host NOTICE #channel :\001not a PRIVMSG\001')
+        assert CtcpMessage.from_message(m) is None
+
+        m = Message.from_line(':nick!user@host PRIVMSG #channel :\001this is just bold text')
+        assert CtcpMessage.from_message(m) is None
+
+        m = Message.from_line(':nick!user@host PRIVMSG #channel :\001\001')  # what is this even
+        assert CtcpMessage.from_message(m) is None
+
+        m = Message.from_line(':nick!user@host PRIVMSG #channel :\001 or this\001')
+        assert CtcpMessage.from_message(m) is None
+
+
+class TestTextMessage:
+
+    def test_attrs(self):
+        m = Message.from_line(':nick!user@host PRIVMSG #channel :Some  message')
+        tm = TextMessage.from_message(m)
+        assert tm.sender == "nick"
+        assert tm.target == "#channel"
+        assert tm.line == "Some  message"
+        assert tm.words == ["Some", "message"]

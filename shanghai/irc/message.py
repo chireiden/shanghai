@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
+import types
 from typing import Dict, List, Mapping, NamedTuple, Optional, Sequence, Union
 
 from .server_reply import ServerReply
@@ -57,18 +58,13 @@ class Prefix(NamedTuple):
         return ret
 
 
-class Message:
+class Message(NamedTuple):
 
-    def __init__(self, command: str, *,
-                 prefix: Prefix = None,
-                 params: Sequence[str] = None,
-                 tags: Mapping[str, Union[str, bool]] = None,
-                 raw_line: str = None) -> None:
-        self.command = command
-        self.prefix = prefix
-        self.params = params if params is not None else []
-        self.tags = tags if tags is not None else {}
-        self.raw_line = raw_line
+    command: str
+    prefix: Optional[Prefix] = None
+    params: Sequence[str] = ()
+    tags: Mapping[str, Union[str, bool]] = types.MappingProxyType({})  # immutable dict
+    raw_line: str = None
 
     @staticmethod
     def escape(value: str) -> str:
@@ -135,9 +131,78 @@ class Message:
                 param, _, line = line.partition(" ")
                 params.append(param)
 
-        return cls(command, prefix=prefix, params=params, tags=tags,
-                   raw_line=raw_line)
+        return cls(command, prefix, params, tags, raw_line)
 
     def __repr__(self) -> str:
         return (f"{self.__class__.__name__}({self.command!r}, prefix={self.prefix!r},"
                 f" params={self.params!r}, tags={self.tags!r})")
+
+
+class CtcpMessage(Message):
+    # http://www.kvirc.net/doc/doc_ctcp_handling.html
+
+    @classmethod
+    def from_message(cls, msg: Message):
+        """Very primitive but should do the job for now."""
+        if not msg.command == 'PRIVMSG':
+            return None
+        line = msg.params[1]
+        if not line.startswith('\x01') or not line.endswith('\x01'):
+            return None
+        line = line[1:-1].rstrip()
+        if not line:
+            return None
+        ctcp_cmd, _, ctcp_text = line.partition(' ')
+        if not ctcp_cmd:
+            return None
+        ctcp_cmd = ctcp_cmd.upper()
+        ctcp_params = ctcp_text.split()
+
+        fields = {**msg._asdict(), 'command': ctcp_cmd, 'params': ctcp_params}
+        return cls(**fields)  # type: ignore
+
+
+class TextMessage(Message):
+    # abstract base class
+    # with some convenience properties
+    @property
+    def target(self):
+        return self.params[0]
+
+    @property
+    def line(self):
+        return self.params[1]
+
+    @property
+    def words(self):
+        return self.params[1].split()
+
+    @property
+    def sender(self):
+        return self.prefix.name
+
+    @classmethod
+    def from_message(cls, message: Message):
+        assert len(message.params) == 2
+        return cls(**message._asdict())
+
+
+# TODO do we need these "specialized" classes at all?
+class ChannelMessage(TextMessage):
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}'
+                f' sender={self.sender!r} target={self.target!r} message={self.line!r}>')
+
+
+class PrivateMessage(TextMessage):
+    def __repr__(self):
+        return (f'<{self.__class__.__name__}'
+                f' sender={self.sender!r} message={self.line!r}>')
+
+
+class ChannelNotice(ChannelMessage):
+    pass
+
+
+class PrivateNotice(PrivateMessage):
+    pass

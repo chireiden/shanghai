@@ -16,78 +16,112 @@
 # You should have received a copy of the GNU General Public License
 # along with Shanghai.  If not, see <http://www.gnu.org/licenses/>.
 
-from shanghai.event import global_event, GlobalEventName, ReturnValue
-
 __plugin_name__ = 'Test'
 __plugin_version__ = 'β.γ.μ'
 __plugin_description__ = 'bla blub'
 
 
-async def channel_message(ctx, message):
-    ctx.logger.debug(f'Got a channel message {message}')
-
-    def unhighlight(nick):
-        return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
-
-    if message.words[0] == '!nicks':
-        nick_list = [unhighlight(member.prefix.name)
-                     for member in ctx.members]
-        ctx.say(' '.join(nick_list))
-
-    if message.words[0] == '!names':
-        nick_list = []
-        for member in ctx.members:
-            prefixes = ctx.network_context.options.modes_to_prefixes(member.modes)
-            nick_list.append(f"{prefixes}{unhighlight(member.prefix.name)}")
-        ctx.say(' '.join(nick_list))
-
-    elif message.words[0] == '!channels':
-        chan_list = [f"{_c_ctx.name} ({len(_c_ctx.members)})"
-                     for _c_ctx in ctx.network_context.channels.values()]
-        ctx.say(', '.join(chan_list))
+from ..irc.message import ChannelMessage, PrivateMessage
+from ..plugin_base import (ChannelEventName, ChannelPlugin,
+                           ChannelMessageMixin, MessagePluginMixin,
+                           NetworkEventName, NetworkPlugin)
+from ..event import event, ReturnValue
 
 
-async def private_message(ctx, message):
-    ctx.logger.debug(f'Got a private message {message}')
-
-    if message.words[0] == '!say':
-        if len(message.words) >= 3:
-            target_channel = message.words[1]
-            text = ' '.join(message.words[2:])
-            ctx.msg(target_channel, f'{message.sender} told me to say: {text}')
+def _unhighlight(nick):
+    return f'{nick[:1]}\N{ZERO WIDTH SPACE}{nick[1:]}'
 
 
-# just for testing
-@global_event(GlobalEventName.INIT_NETWORK_CTX)
-async def init_context(ctx):
-    ctx.channel_event('ChannelMessage')(channel_message)
-    ctx.channel_event('PrivateMessage')(private_message)
+class TestNetworkPlugin(NetworkPlugin, MessagePluginMixin):
 
-    @ctx.message_event('PRIVMSG')
-    async def on_privmsg(ctx, message):
-        line = message.params[-1]
-        words = line.split()
+    @event(NetworkEventName.PRIVATE_MESSAGE)
+    def on_private_message(self, user, message: PrivateMessage):
+        self.logger.debug(f'Got a private message {message}')
 
-        if words[0] == '!except':
+        if message.words[0] == '!echo':
+            if len(message.words) >= 3:
+                text = ' '.join(message.words[2:])
+                self.send_msg(message.source, text)
+
+        elif message.words[0] == '!say':
+            if len(message.words) >= 3:
+                text = ' '.join(message.words[2:])
+                self.send_msg(message.source, f'{message.sender} told me to say: {text}')
+
+
+class TestChannelPlugin(ChannelPlugin, ChannelMessageMixin):
+
+    @event(ChannelEventName.JOINED)
+    def on_joined(self):
+        self.logger.info(f"Joined channel {self.channel}")
+
+    @event(ChannelEventName.MESSAGE)
+    def on_channel_message(self, message: ChannelMessage):
+        self.logger.debug(f'Got a channel message {message}')
+        first_word = message.words[0]
+
+        if first_word == '!nicks':
+            nick_list = [_unhighlight(member.prefix.name)
+                         for member in self.channel.members]
+            self.say(' '.join(nick_list))
+
+        elif first_word == '!names':
+            nick_list = []
+            for member in self.channel.members:
+                prefixes = self.network.options.modes_to_prefixes(member.modes)
+                nick_list.append(f"{prefixes}{_unhighlight(member.prefix.name)}")
+            self.say(' '.join(nick_list))
+
+        elif first_word == '!channels':
+            sorted_channels = sorted(self.network.channels.values(), key=lambda c: c.name)
+            channel_strings = (f"{chan.name} ({len(chan.members)})"
+                               for chan in sorted_channels)
+            self.say(', '.join(channel_strings))
+
+        elif first_word == '!except':
             raise Exception('Test Exception')
 
-        elif words[0] == '!quit':
-            await ctx.network.request_close(line)
+        elif first_word == '!quit':
+            self.network.request_close(message.line)
 
-        elif words[0] == '!cancel':
-            ctx.network._close()
-            ctx.network.stopped = False
+        elif first_word == '!cancel':
+            # this is private API, but we specifically want to "cancel" the worker
+            self.network._close()
+            self.network.stopped = False
 
-        elif words[0] == '!ctcp':
-            if len(words) < 2:
-                return
-            ctx.send_ctcp(message.prefix.name, words[1], ' '.join(words[2:]))
+        elif first_word == '!ctcp':
+            if len(message.words) >= 2:
+                self.send_ctcp(message.prefix.name, message.words[1], ' '.join(message.words[2:]))
 
-        elif words[0] == '!eat':
-            if len(words) == 2:
-                return words[1]
-            return ReturnValue.EAT
+        elif first_word == '!eat':
+            if len(message.words) == 2:
+                return message.words[1]
+            return ReturnValue(eat=True)
 
-        elif words[0] == '!quote':
-            _, line_to_send = line.split(maxsplit=1)
-            ctx.send_line(line_to_send)
+        elif first_word == '!quote':
+            _, line_to_send = message.line.split(maxsplit=1)
+            self.send_line(line_to_send)
+
+        elif first_word == '!say':
+            if len(message.words) >= 2:
+                text = ' '.join(message.words[1:])
+                self.say(text)
+
+        elif first_word == '!me':
+            if len(message.words) >= 2:
+                text = ' '.join(message.words[1:])
+                self.me(text)
+
+        elif first_word == '!join':
+            if len(message.words) == 2:
+                self.send_cmd('JOIN', message.words[1])
+
+        elif first_word == '!part':
+            if len(message.words) >= 2:
+                channel_name = message.words[1]
+                part_msg = ' '.join(message.words[2:])
+            elif len(message.words) == 1:
+                channel_name = self.channel.name
+                part_msg = ""
+
+            self.send_cmd('PART', channel_name, part_msg)

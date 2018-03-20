@@ -9,6 +9,10 @@ env:
   - TOXENV=mypy
   - TOXENV=pylint
 
+branches:
+  except:
+    - /^wip\//
+
 install:
   - pip install tox
   - pip install coveralls
