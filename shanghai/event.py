@@ -215,7 +215,7 @@ class HandlerInstance:
     info: HandlerInfo
     enabled: bool
 
-    def __init__(self, handler: EventHandler, info: HandlerInfo, enabled: bool):
+    def __init__(self, handler: EventHandler, info: HandlerInfo, enabled: bool) -> None:
         self.handler = handler
         self.info = info
         self.enabled = enabled

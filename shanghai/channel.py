@@ -21,8 +21,13 @@ from typing import Coroutine, Dict, Iterable, List, NamedTuple, Optional, Set, T
 
 from .event import EventDispatcher
 from .irc import Prefix
-from .logging import get_logger
+from .logging import get_logger, Logger
 from .plugin_base import ChannelPlugin
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .network import Network  # noqa: F401
 
 
 class Member(NamedTuple):
@@ -42,7 +47,7 @@ class Channel:
     # _nw_join_list: Dict[Tuple[str, str], Dict]
 
     def __init__(self,
-                 network: 'shanghai.network.Network',
+                 network: 'Network',
                  name: str,
                  nw_join_list: Dict[Tuple[str, str], Dict],
                  ) -> None:
@@ -52,8 +57,8 @@ class Channel:
 
         # TODO build channel config
         self.config = self.network.config
-        self.logger = get_logger('channel', f'{self.name}@{self.network.name}',
-                                 self.config)
+        self.logger: Logger = get_logger('channel', f'{self.name}@{self.network.name}',
+                                         self.config)
         self.modes = ChannelModes()
         self.event_queue: asyncio.Queue = asyncio.Queue()
 

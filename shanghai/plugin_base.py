@@ -19,9 +19,11 @@
 import enum
 
 from .logging import Logger
-# recursive imports:
-# from .network import Network
-# from .channel import Channel
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .network import Network  # noqa: F401
+    from .channel import Channel  # noqa: F401
 
 
 class NetworkEventName(str, enum.Enum):
@@ -59,7 +61,7 @@ class NetworkPlugin:
     of the type `shanghai.irc.Message`.
     """
 
-    def __init__(self, network: 'shanghai.network.Network', logger: Logger) -> None:
+    def __init__(self, network: 'Network', logger: Logger) -> None:
         self.network = network
         self.logger = logger
         super().__init__()
@@ -154,7 +156,7 @@ class ChannelPlugin(CtcpPluginMixin):
     with their parameters.
     """
 
-    def __init__(self, channel: 'shanghai.channel.Channel') -> None:
+    def __init__(self, channel: 'Channel') -> None:
         self.channel = channel
         self.network = channel.network
         self.logger = channel.logger
