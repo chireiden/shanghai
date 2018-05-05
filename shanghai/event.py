@@ -34,6 +34,9 @@ class ReturnValue(NamedTuple):
     eat: bool = False
     append_events: Iterable['Event'] = ()
     insert_events: Iterable['Event'] = ()
+    # TODO this should be passed to the event context object
+    # where the tasks are managed,
+    # as it has nothing to do with events
     schedule: AbstractSet[Coroutine] = frozenset()
 
 
